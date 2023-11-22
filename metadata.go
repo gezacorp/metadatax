@@ -1,6 +1,8 @@
 package metadatax
 
 import (
+	"cmp"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -16,8 +18,8 @@ type MetadataContainer interface {
 type MetadataLabels interface {
 	GetLabels() Labels
 	GetLabelsSlice() []SlicedLabel
-	AddLabel(name string, value ...string)
-	AddLabels(Labels)
+	AddLabel(name string, value ...string) MetadataContainer
+	AddLabels(Labels) MetadataContainer
 	Level(name string, opts ...MetadataOption) MetadataContainer
 }
 
@@ -153,19 +155,25 @@ func (m *metadata) GetLabelsSlice() []SlicedLabel {
 		}
 	}
 
+	slices.SortFunc(labelsSlice, func(left, right SlicedLabel) int {
+		return cmp.Compare(left.Name, right.Name)
+	})
+
 	return labelsSlice
 }
 
-func (m *metadata) AddLabels(labels Labels) {
+func (m *metadata) AddLabels(labels Labels) MetadataContainer {
 	m.lock()
 	defer m.unlock()
 
 	for k, v := range labels {
 		m.AddLabel(k, v...)
 	}
+
+	return m
 }
 
-func (m *metadata) AddLabel(name string, values ...string) {
+func (m *metadata) AddLabel(name string, values ...string) MetadataContainer {
 	m.lock()
 	defer m.unlock()
 
@@ -180,7 +188,7 @@ func (m *metadata) AddLabel(name string, values ...string) {
 	if m.MetadataContainer != nil {
 		m.MetadataContainer.AddLabel(name, values...)
 		if !m.opts.storeOnSubLevel {
-			return
+			return m
 		}
 	}
 
@@ -188,7 +196,7 @@ func (m *metadata) AddLabel(name string, values ...string) {
 		m.Labels[name] = make([]string, 0)
 	} else if m.opts.uniqueKeys {
 		m.Labels[name] = values[len(values)-1:]
-		return
+		return m
 	}
 
 	m.Labels[name] = append(m.Labels[name], values...)
@@ -196,6 +204,8 @@ func (m *metadata) AddLabel(name string, values ...string) {
 	if m.opts.uniqueValues {
 		m.Labels[name] = m.unique(m.Labels[name])
 	}
+
+	return m
 }
 
 func (m *metadata) unique(values []string) []string {
