@@ -21,6 +21,7 @@ type IMDSClient interface {
 type collector struct {
 	imdsClient  IMDSClient
 	mdcontainer metadatax.MetadataContainer
+	onEC2       bool
 }
 
 type CollectorOption func(*collector)
@@ -28,6 +29,12 @@ type CollectorOption func(*collector)
 func WithIMDSClient(client IMDSClient) CollectorOption {
 	return func(c *collector) {
 		c.imdsClient = client
+	}
+}
+
+func WithForceOnEC2() CollectorOption {
+	return func(c *collector) {
+		c.onEC2 = true
 	}
 }
 
@@ -51,6 +58,13 @@ func New(opts ...CollectorOption) (metadatax.Collector, error) {
 		}
 
 		c.imdsClient = NewIMDSClient(imds.NewFromConfig(cfg))
+
+		// get instance ID to confirm EC2 node
+		if !c.onEC2 {
+			if instanceID := c.imdsClient.GetMetadataContent(context.Background(), "instance-id"); instanceID != "" {
+				c.onEC2 = true
+			}
+		}
 	}
 
 	if c.mdcontainer == nil {
@@ -61,6 +75,10 @@ func New(opts ...CollectorOption) (metadatax.Collector, error) {
 }
 
 func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContainer, error) {
+	if !c.onEC2 {
+		return c.mdcontainer, nil
+	}
+
 	getters := []func(context.Context, metadatax.MetadataContainer){
 		c.base,
 		c.network,

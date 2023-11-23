@@ -42,6 +42,7 @@ func TestGetMetadata(t *testing.T) {
 		ec2.WithIMDSClient(&imdsClient{
 			data: data,
 		}),
+		ec2.WithForceOnEC2(),
 	)
 	assert.Nil(t, err)
 
