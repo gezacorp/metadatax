@@ -6,4 +6,5 @@ use (
 	./collectors/procfs
 	./collectors/docker
 	./collectors/kubernetes
+	./collectors/ec2
 )
