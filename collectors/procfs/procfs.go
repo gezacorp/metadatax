@@ -100,7 +100,7 @@ func (c *collector) base(ctx context.Context, mdGetter MetadataGetter, md metada
 func (c *collector) uids(ctx context.Context, mdGetter MetadataGetter, md metadatax.MetadataContainer) {
 	if uids, err := mdGetter.UidsWithContext(ctx); err == nil {
 		if len(uids) == 4 {
-			uidmd := md.Level("uid")
+			uidmd := md.Segment("uid")
 			uidmd.AddLabel("", strconv.Itoa(int(uids[1])))
 			uidmd.AddLabel("real", strconv.Itoa(int(uids[0])))
 			uidmd.AddLabel("effective", strconv.Itoa(int(uids[1])))
@@ -109,7 +109,7 @@ func (c *collector) uids(ctx context.Context, mdGetter MetadataGetter, md metada
 }
 
 func (c *collector) gids(ctx context.Context, mdGetter MetadataGetter, md metadatax.MetadataContainer) {
-	gidmd := md.Level("gid")
+	gidmd := md.Segment("gid")
 
 	if gids, err := mdGetter.GidsWithContext(ctx); err == nil {
 		if len(gids) == 4 {
@@ -127,7 +127,7 @@ func (c *collector) gids(ctx context.Context, mdGetter MetadataGetter, md metada
 }
 
 func (c *collector) envs(ctx context.Context, mdGetter MetadataGetter, md metadatax.MetadataContainer) {
-	envmd := md.Level("env")
+	envmd := md.Segment("env")
 
 	if envs, err := mdGetter.EnvironWithContext(ctx); err == nil {
 		for _, env := range envs {
@@ -141,7 +141,7 @@ func (c *collector) envs(ctx context.Context, mdGetter MetadataGetter, md metada
 }
 
 func (c *collector) binary(ctx context.Context, mdGetter MetadataGetter, md metadatax.MetadataContainer) {
-	bmd := md.Level("binary")
+	bmd := md.Segment("binary")
 
 	if exe, err := mdGetter.ExeWithContext(ctx); err == nil {
 		bmd.AddLabel("path", exe)

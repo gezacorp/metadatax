@@ -60,7 +60,7 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 	md.AddLabel("name", info.HostOSName)
 	md.AddLabel("version", info.HostLinuxVersion)
 
-	kernel := md.Level("kernel")
+	kernel := md.Segment("kernel")
 	kernel.AddLabel("release", strings.Trim(strings.Join([]string{info.HostKernelName, info.HostKernelRelease}, "-"), "-"))
 	kernel.AddLabel("version", info.HostKernelVersion)
 
