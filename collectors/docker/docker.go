@@ -26,6 +26,8 @@ type collector struct {
 	containerIDGetter             ContainerIDGetter
 	ignoreMissingContainerIDError bool
 	ignoreNoSuchContainerError    bool
+
+	mdcontainer metadatax.MetadataContainer
 }
 
 type MetadataGetter interface {
@@ -74,6 +76,12 @@ func WithIgnoreNoSuchContainerError() CollectorOption {
 	}
 }
 
+func CollectorWithMetadataContainer(mdcontainer metadatax.MetadataContainer) CollectorOption {
+	return func(c *collector) {
+		c.mdcontainer = mdcontainer
+	}
+}
+
 func New(opts ...CollectorOption) (metadatax.Collector, error) {
 	c := &collector{}
 
@@ -93,6 +101,10 @@ func New(opts ...CollectorOption) (metadatax.Collector, error) {
 		c.containerIDGetter = c
 	}
 
+	if c.mdcontainer == nil {
+		c.mdcontainer = metadatax.New(metadatax.WithPrefix(name))
+	}
+
 	return c, nil
 }
 
@@ -102,15 +114,13 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 		return nil, metadatax.PIDNotFoundError
 	}
 
-	md := metadatax.New(metadatax.WithPrefix(name))
-
 	containerID, err := c.containerIDGetter.GetContainerIDFromPID(int(pid))
 	if err != nil {
 		return nil, errors.WrapIfWithDetails(err, "could not get cgroups from pid", "pid", pid)
 	}
 	if containerID == "" {
 		if c.ignoreMissingContainerIDError {
-			return md, nil
+			return c.mdcontainer, nil
 		}
 
 		return nil, errors.WithDetails(ContainerIDNotFoundError, "pid", pid)
@@ -118,7 +128,7 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 
 	containerJSON, err := c.metadataGetter.ContainerInspect(ctx, containerID)
 	if c.ignoreNoSuchContainerError && client.IsErrNotFound(err) {
-		return md, nil
+		return c.mdcontainer, nil
 	}
 	if err != nil {
 		return nil, err
@@ -133,10 +143,10 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 	}
 
 	for _, f := range getters {
-		f(containerJSON, md)
+		f(containerJSON, c.mdcontainer)
 	}
 
-	return md, nil
+	return c.mdcontainer, nil
 }
 
 func (c *collector) GetContainerIDFromPID(pid int) (string, error) {

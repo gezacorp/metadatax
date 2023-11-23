@@ -33,6 +33,7 @@ type podContext struct {
 type collector struct {
 	kubeletClient kubelet.Client
 	podResolver   PodResolver
+	mdcontainer   metadatax.MetadataContainer
 }
 
 type CollectorOption func(*collector)
@@ -49,6 +50,12 @@ func WithPodResolver(resolver PodResolver) CollectorOption {
 	}
 }
 
+func CollectorWithMetadataContainer(mdcontainer metadatax.MetadataContainer) CollectorOption {
+	return func(c *collector) {
+		c.mdcontainer = mdcontainer
+	}
+}
+
 func New(opts ...CollectorOption) metadatax.Collector {
 	c := &collector{}
 
@@ -58,6 +65,10 @@ func New(opts ...CollectorOption) metadatax.Collector {
 
 	if c.podResolver == nil {
 		c.podResolver = c
+	}
+
+	if c.mdcontainer == nil {
+		c.mdcontainer = metadatax.New(metadatax.WithPrefix(name))
 	}
 
 	return c
@@ -76,10 +87,8 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 
 	fmt.Println(podID, containerID)
 
-	md := metadatax.New(metadatax.WithPrefix(name))
-
 	if podID == "" || containerID == "" {
-		return md, nil
+		return c.mdcontainer, nil
 	}
 
 	pods, err := c.kubeletClient.GetPods(ctx)
@@ -89,7 +98,7 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 
 	podctx, found := c.getPodContext(podID, containerID, pods)
 	if !found {
-		return md, nil
+		return c.mdcontainer, nil
 	}
 
 	getters := []func(podContext, metadatax.MetadataContainer){
@@ -101,10 +110,10 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 	}
 
 	for _, f := range getters {
-		f(podctx, md)
+		f(podctx, c.mdcontainer)
 	}
 
-	return md, nil
+	return c.mdcontainer, nil
 }
 
 func (c *collector) pod(podctx podContext, md metadatax.MetadataContainer) {

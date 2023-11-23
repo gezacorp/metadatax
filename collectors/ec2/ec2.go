@@ -19,8 +19,8 @@ type IMDSClient interface {
 }
 
 type collector struct {
-	prefix     string
-	imdsClient IMDSClient
+	imdsClient  IMDSClient
+	mdcontainer metadatax.MetadataContainer
 }
 
 type CollectorOption func(*collector)
@@ -31,9 +31,9 @@ func WithIMDSClient(client IMDSClient) CollectorOption {
 	}
 }
 
-func WithPrefix(prefix string) CollectorOption {
+func CollectorWithMetadataContainer(mdcontainer metadatax.MetadataContainer) CollectorOption {
 	return func(c *collector) {
-		c.prefix = prefix
+		c.mdcontainer = mdcontainer
 	}
 }
 
@@ -42,10 +42,6 @@ func New(opts ...CollectorOption) (metadatax.Collector, error) {
 
 	for _, f := range opts {
 		f(c)
-	}
-
-	if c.prefix == "" {
-		c.prefix = name
 	}
 
 	if c.imdsClient == nil {
@@ -57,12 +53,14 @@ func New(opts ...CollectorOption) (metadatax.Collector, error) {
 		c.imdsClient = NewIMDSClient(imds.NewFromConfig(cfg))
 	}
 
+	if c.mdcontainer == nil {
+		c.mdcontainer = metadatax.New(metadatax.WithPrefix(name))
+	}
+
 	return c, nil
 }
 
 func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContainer, error) {
-	md := metadatax.New(metadatax.WithPrefix(c.prefix))
-
 	getters := []func(context.Context, metadatax.MetadataContainer){
 		c.base,
 		c.network,
@@ -71,10 +69,10 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 	}
 
 	for _, f := range getters {
-		f(ctx, md)
+		f(ctx, c.mdcontainer)
 	}
 
-	return md, nil
+	return c.mdcontainer, nil
 }
 
 func (c *collector) base(ctx context.Context, md metadatax.MetadataContainer) {

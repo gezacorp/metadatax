@@ -22,6 +22,7 @@ type collector struct {
 	extractEnvs bool
 
 	metadataGetter MetadataGetter
+	mdcontainer    metadatax.MetadataContainer
 }
 
 type MetadataGetter interface {
@@ -42,11 +43,21 @@ func CollectorWithMetadataGetter(mdGetter MetadataGetter) CollectorOption {
 	}
 }
 
+func CollectorWithMetadataContainer(mdcontainer metadatax.MetadataContainer) CollectorOption {
+	return func(c *collector) {
+		c.mdcontainer = mdcontainer
+	}
+}
+
 func New(opts ...CollectorOption) metadatax.Collector {
 	c := &collector{}
 
 	for _, f := range opts {
 		f(c)
+	}
+
+	if c.mdcontainer == nil {
+		c.mdcontainer = metadatax.New(metadatax.WithPrefix(name))
 	}
 
 	return c
@@ -66,8 +77,7 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 		c.metadataGetter = proc
 	}
 
-	md := metadatax.New(metadatax.WithPrefix(name))
-	md.AddLabel("pid", strconv.Itoa(int(pid)))
+	c.mdcontainer.AddLabel("pid", strconv.Itoa(int(pid)))
 
 	getters := []func(context.Context, MetadataGetter, metadatax.MetadataContainer){
 		c.base,
@@ -81,10 +91,10 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 	}
 
 	for _, f := range getters {
-		f(ctx, c.metadataGetter, md)
+		f(ctx, c.metadataGetter, c.mdcontainer)
 	}
 
-	return md, nil
+	return c.mdcontainer, nil
 }
 
 func (c *collector) base(ctx context.Context, mdGetter MetadataGetter, md metadatax.MetadataContainer) {
