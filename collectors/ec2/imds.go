@@ -29,7 +29,9 @@ func (c *imdsClient) GetMetadataContent(ctx context.Context, path string) string
 
 func (c *imdsClient) readContent(reader io.ReadCloser) string {
 	buff := new(bytes.Buffer)
-	buff.ReadFrom(reader)
+	if _, err := buff.ReadFrom(reader); err != nil {
+		return ""
+	}
 
 	return buff.String()
 }
