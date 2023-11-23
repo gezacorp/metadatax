@@ -37,6 +37,7 @@ type metadataOpts struct {
 	storeAtSegment   bool
 	uniqueValues     bool
 	uniqueKeys       bool
+	allowEmptyValues bool
 }
 
 type metadata struct {
@@ -101,6 +102,12 @@ func WithUniqueValues(enabled bool) MetadataOption {
 func WithUniqueKeys(enabled bool) MetadataOption {
 	return func(m *metadata) {
 		m.opts.uniqueKeys = enabled
+	}
+}
+
+func WithAllowEmptyValues(enabled bool) MetadataOption {
+	return func(m *metadata) {
+		m.opts.allowEmptyValues = enabled
 	}
 }
 
@@ -175,6 +182,23 @@ func (m *metadata) AddLabels(labels Labels) MetadataContainer {
 func (m *metadata) AddLabel(name string, values ...string) MetadataContainer {
 	m.lock()
 	defer m.unlock()
+
+	if !m.opts.allowEmptyValues {
+		if values == nil {
+			return m
+		}
+		_values := values[:0]
+		for _, v := range values {
+			if v == "" {
+				continue
+			}
+			_values = append(_values, v)
+		}
+		values = _values
+		if len(values) == 0 {
+			return m
+		}
+	}
 
 	if m.opts.prefix != "" {
 		if name != "" {
