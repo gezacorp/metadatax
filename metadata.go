@@ -1,14 +1,13 @@
 package metadatax
 
 import (
-	"cmp"
-	"slices"
+	"sort"
 	"strings"
 	"sync"
 )
 
 const (
-	defaultLevelSeparator = ":"
+	defaultSegmentSeparator = ":"
 )
 
 type MetadataContainer interface {
@@ -20,7 +19,7 @@ type MetadataLabels interface {
 	GetLabelsSlice() []SlicedLabel
 	AddLabel(name string, value ...string) MetadataContainer
 	AddLabels(Labels) MetadataContainer
-	Level(name string, opts ...MetadataOption) MetadataContainer
+	Segment(name string, opts ...MetadataOption) MetadataContainer
 }
 
 type Labels map[string][]string
@@ -33,11 +32,11 @@ type SlicedLabel struct {
 type MetadataOption func(*metadata)
 
 type metadataOpts struct {
-	prefix          string
-	levelSeparator  string
-	storeOnSubLevel bool
-	uniqueValues    bool
-	uniqueKeys      bool
+	prefix           string
+	segmentSeparator string
+	storeAtSegment   bool
+	uniqueValues     bool
+	uniqueKeys       bool
 }
 
 type metadata struct {
@@ -75,15 +74,15 @@ func WithPrefix(prefix string) MetadataOption {
 	}
 }
 
-func WithLevelSeparator(separator string) MetadataOption {
+func WithSegmentSeparator(separator string) MetadataOption {
 	return func(m *metadata) {
-		m.opts.levelSeparator = separator
+		m.opts.segmentSeparator = separator
 	}
 }
 
-func WithStoreOnSubLevel(store bool) MetadataOption {
+func WithStoreAtSegment(store bool) MetadataOption {
 	return func(m *metadata) {
-		m.opts.storeOnSubLevel = store
+		m.opts.storeAtSegment = store
 	}
 }
 
@@ -114,14 +113,14 @@ func New(opts ...MetadataOption) MetadataContainer {
 		o(m)
 	}
 
-	if m.opts.levelSeparator == "" {
-		m.opts.levelSeparator = defaultLevelSeparator
+	if m.opts.segmentSeparator == "" {
+		m.opts.segmentSeparator = defaultSegmentSeparator
 	}
 
 	return m
 }
 
-func (m *metadata) Level(name string, opts ...MetadataOption) MetadataContainer {
+func (m *metadata) Segment(name string, opts ...MetadataOption) MetadataContainer {
 	inheritedOpts := []MetadataOption{
 		withMetadataOpts(m.opts),
 		WithPrefix(name),
@@ -155,8 +154,8 @@ func (m *metadata) GetLabelsSlice() []SlicedLabel {
 		}
 	}
 
-	slices.SortFunc(labelsSlice, func(left, right SlicedLabel) int {
-		return cmp.Compare(left.Name, right.Name)
+	sort.SliceStable(labelsSlice, func(i, j int) bool {
+		return strings.Compare(labelsSlice[i].Name, labelsSlice[j].Name) < 0
 	})
 
 	return labelsSlice
@@ -179,7 +178,7 @@ func (m *metadata) AddLabel(name string, values ...string) MetadataContainer {
 
 	if m.opts.prefix != "" {
 		if name != "" {
-			name = strings.Join([]string{m.opts.prefix, m.opts.levelSeparator, name}, "")
+			name = strings.Join([]string{m.opts.prefix, m.opts.segmentSeparator, name}, "")
 		} else {
 			name = m.opts.prefix
 		}
@@ -187,7 +186,7 @@ func (m *metadata) AddLabel(name string, values ...string) MetadataContainer {
 
 	if m.MetadataContainer != nil {
 		m.MetadataContainer.AddLabel(name, values...)
-		if !m.opts.storeOnSubLevel {
+		if !m.opts.storeAtSegment {
 			return m
 		}
 	}
