@@ -8,4 +8,5 @@ use (
 	./collectors/kubernetes
 	./collectors/ec2
 	./collectors/azure
+	./collectors/gcp
 )

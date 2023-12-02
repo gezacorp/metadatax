@@ -1,0 +1,96 @@
+{
+    "attributes": {
+        "mdkey": "mdvalue"
+    },
+    "cpuPlatform": "AMD Rome",
+    "description": "",
+    "disks": [
+        {
+            "deviceName": "instance-1",
+            "index": 0,
+            "interface": "SCSI",
+            "mode": "READ_WRITE",
+            "type": "PERSISTENT"
+        }
+    ],
+    "guestAttributes": {},
+    "hostname": "instance-1.europe-west4-a.c.inlaid-fuze-402617.internal",
+    "id": 5240495278393851000,
+    "image": "projects/debian-cloud/global/images/debian-11-bullseye-v20231115",
+    "licenses": [
+        {
+            "id": "3853522013536123851"
+        }
+    ],
+    "machineType": "projects/758913618900/machineTypes/e2-medium",
+    "maintenanceEvent": "NONE",
+    "name": "instance-1",
+    "networkInterfaces": [
+        {
+            "accessConfigs": [
+                {
+                    "externalIp": "35.204.15.15",
+                    "type": "ONE_TO_ONE_NAT"
+                }
+            ],
+            "dnsServers": [
+                "169.254.169.254"
+            ],
+            "forwardedIps": [],
+            "gateway": "10.164.0.1",
+            "ip": "10.164.0.2",
+            "ipAliases": [],
+            "mac": "42:01:0a:a4:00:02",
+            "mtu": 1460,
+            "network": "projects/758913618900/networks/default",
+            "subnetmask": "255.255.240.0",
+            "targetInstanceIps": []
+        }
+    ],
+    "partnerAttributes": {},
+    "preempted": "FALSE",
+    "remainingCpuTime": -1,
+    "scheduling": {
+        "automaticRestart": "TRUE",
+        "onHostMaintenance": "MIGRATE",
+        "preemptible": "FALSE"
+    },
+    "serviceAccounts": {
+        "758913618900-compute@developer.gserviceaccount.com": {
+            "aliases": [
+                "default"
+            ],
+            "email": "758913618900-compute@developer.gserviceaccount.com",
+            "scopes": [
+                "https://www.googleapis.com/auth/devstorage.read_only",
+                "https://www.googleapis.com/auth/logging.write",
+                "https://www.googleapis.com/auth/monitoring.write",
+                "https://www.googleapis.com/auth/servicecontrol",
+                "https://www.googleapis.com/auth/service.management.readonly",
+                "https://www.googleapis.com/auth/trace.append"
+            ]
+        },
+        "default": {
+            "aliases": [
+                "default"
+            ],
+            "email": "758913618900-compute@developer.gserviceaccount.com",
+            "scopes": [
+                "https://www.googleapis.com/auth/devstorage.read_only",
+                "https://www.googleapis.com/auth/logging.write",
+                "https://www.googleapis.com/auth/monitoring.write",
+                "https://www.googleapis.com/auth/servicecontrol",
+                "https://www.googleapis.com/auth/service.management.readonly",
+                "https://www.googleapis.com/auth/trace.append"
+            ]
+        }
+    },
+    "tags": [
+        "tag-1",
+        "tag-2"
+    ],
+    "virtualClock": {
+        "driftToken": "0"
+    },
+    "zone": "projects/758913618900/zones/europe-west4-a"
+}
