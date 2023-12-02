@@ -80,7 +80,10 @@ func TestGetMetadata(t *testing.T) {
 		"azure:vm:version":           {"22.04.202311010"},
 	}
 
-	collector := azure.New(azure.CollectorWithMetadataGetter(&mdgetter{}))
+	collector := azure.New(
+		azure.CollectorWithMetadataGetter(&mdgetter{}),
+		azure.CollectorWithForceOnAzure(),
+	)
 	md, err := collector.GetMetadata(context.Background())
 	assert.Nil(t, err)
 

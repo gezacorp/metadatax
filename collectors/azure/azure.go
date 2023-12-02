@@ -1,7 +1,9 @@
 package azure
 
 import (
+	"bytes"
 	"context"
+	"os"
 
 	"github.com/gezacorp/metadatax"
 )
@@ -12,6 +14,7 @@ const (
 
 type collector struct {
 	metadataGetter MetadataGetter
+	onAzure        bool
 	mdcontainer    metadatax.MetadataContainer
 }
 
@@ -20,6 +23,12 @@ type CollectorOption func(*collector)
 type MetadataGetter interface {
 	GetInstanceMetadata(ctx context.Context) (*AzureMetadataInstance, error)
 	GetLoadBalancerMetadata(ctx context.Context) (*AzureMetadataLoadBalancer, error)
+}
+
+func CollectorWithForceOnAzure() CollectorOption {
+	return func(c *collector) {
+		c.onAzure = true
+	}
 }
 
 func CollectorWithMetadataGetter(metadataGetter MetadataGetter) CollectorOption {
@@ -53,6 +62,10 @@ func New(opts ...CollectorOption) metadatax.Collector {
 }
 
 func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContainer, error) {
+	if !c.isOnAzure() {
+		return c.mdcontainer, nil
+	}
+
 	instance, err := c.metadataGetter.GetInstanceMetadata(ctx)
 	if err != nil {
 		return c.mdcontainer, err
@@ -132,4 +145,17 @@ func (c *collector) network(md metadatax.MetadataContainer, instance *AzureMetad
 	for _, ip := range lb.LoadBalancer.PublicIPAddresses {
 		nmd.AddLabel("public-ipv4", ip.FrontendIpAddress)
 	}
+}
+
+func (c *collector) isOnAzure() bool {
+	if c.onAzure {
+		return true
+	}
+
+	data, err := os.ReadFile("/sys/class/dmi/id/sys_vendor")
+	if err != nil {
+		return false
+	}
+
+	return bytes.Contains(data, []byte("Microsoft Corporation"))
 }
