@@ -9,4 +9,5 @@ use (
 	./collectors/ec2
 	./collectors/azure
 	./collectors/gcp
+	./collectors/sysfsdmi
 )
