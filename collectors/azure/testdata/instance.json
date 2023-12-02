@@ -1,0 +1,121 @@
+{
+    "compute": {
+        "azEnvironment": "AzurePublicCloud",
+        "customData": "",
+        "evictionPolicy": "Delete",
+        "isHostCompatibilityLayerVm": "false",
+        "licenseType": "",
+        "location": "westeurope",
+        "name": "demo",
+        "offer": "0001-com-ubuntu-server-jammy",
+        "osProfile": {
+            "adminUsername": "azureuser",
+            "computerName": "demo",
+            "disablePasswordAuthentication": "true"
+        },
+        "osType": "Linux",
+        "placementGroupId": "",
+        "plan": {
+            "name": "",
+            "product": "",
+            "publisher": ""
+        },
+        "platformFaultDomain": "0",
+        "platformUpdateDomain": "0",
+        "priority": "Spot",
+        "provider": "Microsoft.Compute",
+        "publicKeys": [
+            {
+                "keyData": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCd5caHzGJyhlG5OVA8MrGUqcTFo1eVgnurHHZ/rkTjXcQPdVJBsPKsNKT7KxWglvRH/vlUC4BQ6SQRciOxeqlB9IFnR5xDXZ2+mpPzTk3TmbJCpyThEN0a10JNOLx4uZO33OoiTuyBYLI3uOHpPfuzDFy7Wqfrd3qQiRClXxShQLhd2lt7l49w6HPP+JmTeDhNb7+L8cQsLvtDXpY27t/D4aO7e3pUH72skjA+8CFMdbB51IbKtObvrPugrErWYaPRb/YZmvUMLApCk6ecqyzW2nkeGzFy0IQobpURXH8gtGsndUNQSq0Ie/P4JAJeP+R19C/bNLY8te9E4yZFljHr wayne@scepter",
+                "path": "/home/azureuser/.ssh/authorized_keys"
+            }
+        ],
+        "publisher": "canonical",
+        "resourceGroupName": "base",
+        "resourceId": "/subscriptions/aef37fca-5441-4532-a1a9-726b55173ca0/resourceGroups/base/providers/Microsoft.Compute/virtualMachines/demo",
+        "securityProfile": {
+            "secureBootEnabled": "false",
+            "virtualTpmEnabled": "false"
+        },
+        "sku": "22_04-lts-gen2",
+        "storageProfile": {
+            "dataDisks": [],
+            "imageReference": {
+                "id": "",
+                "offer": "0001-com-ubuntu-server-jammy",
+                "publisher": "canonical",
+                "sku": "22_04-lts-gen2",
+                "version": "latest"
+            },
+            "osDisk": {
+                "caching": "ReadWrite",
+                "createOption": "FromImage",
+                "diffDiskSettings": {
+                    "option": ""
+                },
+                "diskSizeGB": "30",
+                "encryptionSettings": {
+                    "enabled": "false"
+                },
+                "image": {
+                    "uri": ""
+                },
+                "managedDisk": {
+                    "id": "/subscriptions/aef37fca-5441-4532-a1a9-726b55173ca0/resourceGroups/base/providers/Microsoft.Compute/disks/demo_OsDisk_1_bb16fa28d1354af780021b8294cacd78",
+                    "storageAccountType": "StandardSSD_LRS"
+                },
+                "name": "demo_OsDisk_1_bb16fa28d1354af780021b8294cacd78",
+                "osType": "Linux",
+                "vhd": {
+                    "uri": ""
+                },
+                "writeAcceleratorEnabled": "false"
+            },
+            "resourceDisk": {
+                "size": "30720"
+            }
+        },
+        "subscriptionId": "aef37fca-5441-4532-a1a9-726b55173ca0",
+        "tags": "bela:geza;joska:pista",
+        "tagsList": [
+            {
+                "name": "bela",
+                "value": "geza"
+            },
+            {
+                "name": "joska",
+                "value": "pista"
+            }
+        ],
+        "userData": "",
+        "version": "22.04.202311010",
+        "vmId": "afe12e91-33d9-4b5b-b915-ac81fe117b12",
+        "vmScaleSetName": "default",
+        "vmSize": "Standard_B2ats_v2",
+        "zone": "1"
+    },
+    "network": {
+        "interface": [
+            {
+                "ipv4": {
+                    "ipAddress": [
+                        {
+                            "privateIpAddress": "10.0.0.4",
+                            "publicIpAddress": ""
+                        }
+                    ],
+                    "subnet": [
+                        {
+                            "address": "10.0.0.0",
+                            "prefix": "24"
+                        }
+                    ]
+                },
+                "ipv6": {
+                    "ipAddress": []
+                },
+                "macAddress": "000D3A27CA60"
+            }
+        ]
+    }
+}

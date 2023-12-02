@@ -7,4 +7,5 @@ use (
 	./collectors/docker
 	./collectors/kubernetes
 	./collectors/ec2
+	./collectors/azure
 )
