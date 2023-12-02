@@ -1,7 +1,9 @@
 package ec2
 
 import (
+	"bytes"
 	"context"
+	"os"
 
 	"emperror.dev/errors"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -58,13 +60,6 @@ func New(opts ...CollectorOption) (metadatax.Collector, error) {
 		}
 
 		c.imdsClient = NewIMDSClient(imds.NewFromConfig(cfg))
-
-		// get instance ID to confirm EC2 node
-		if !c.onEC2 {
-			if instanceID := c.imdsClient.GetMetadataContent(context.Background(), "instance-id"); instanceID != "" {
-				c.onEC2 = true
-			}
-		}
 	}
 
 	if c.mdcontainer == nil {
@@ -75,7 +70,7 @@ func New(opts ...CollectorOption) (metadatax.Collector, error) {
 }
 
 func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContainer, error) {
-	if !c.onEC2 {
+	if !c.isOnEC2() {
 		return c.mdcontainer, nil
 	}
 
@@ -146,4 +141,17 @@ func (c *collector) services(ctx context.Context, md metadatax.MetadataContainer
 	for _, key := range keys {
 		smd.AddLabel(key, c.imdsClient.GetMetadataContent(ctx, "services/"+key))
 	}
+}
+
+func (c *collector) isOnEC2() bool {
+	if c.onEC2 {
+		return true
+	}
+
+	data, err := os.ReadFile("/sys/class/dmi/id/sys_vendor")
+	if err != nil {
+		return false
+	}
+
+	return bytes.Contains(data, []byte("Amazon"))
 }
