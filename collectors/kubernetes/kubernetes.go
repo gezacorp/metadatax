@@ -2,7 +2,6 @@ package kubernetes
 
 import (
 	"context"
-	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -84,8 +83,6 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 	if err != nil {
 		return nil, errors.WithDetails(err, "pid", pid)
 	}
-
-	fmt.Println(podID, containerID)
 
 	if podID == "" || containerID == "" {
 		return c.mdcontainer, nil
