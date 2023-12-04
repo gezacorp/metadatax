@@ -15,15 +15,15 @@ const (
 )
 
 type collector struct {
-	metadataGetter MetadataGetter
-	onGoogle       bool
+	gcpMetadataClient GCPMetadataClient
+	onGoogle          bool
 
-	mdcontainerGetter func() metadatax.MetadataContainer
+	mdContainerInitFunc func() metadatax.MetadataContainer
 }
 
 type CollectorOption func(*collector)
 
-type MetadataGetter interface {
+type GCPMetadataClient interface {
 	GetInstanceMetadata(ctx context.Context) (*GCPMetadataInstance, error)
 }
 
@@ -33,15 +33,15 @@ func CollectorWithForceOnGoogle() CollectorOption {
 	}
 }
 
-func CollectorWithMetadataGetter(metadataGetter MetadataGetter) CollectorOption {
+func CollectorWithGCPMetadataClient(gcpMetadataClient GCPMetadataClient) CollectorOption {
 	return func(c *collector) {
-		c.metadataGetter = metadataGetter
+		c.gcpMetadataClient = gcpMetadataClient
 	}
 }
 
-func CollectorWithMetadataContainerGetter(getter func() metadatax.MetadataContainer) CollectorOption {
+func CollectorWithMetadataContainerInitFunc(fn func() metadatax.MetadataContainer) CollectorOption {
 	return func(c *collector) {
-		c.mdcontainerGetter = getter
+		c.mdContainerInitFunc = fn
 	}
 }
 
@@ -52,27 +52,27 @@ func New(opts ...CollectorOption) metadatax.Collector {
 		f(c)
 	}
 
-	if c.mdcontainerGetter == nil {
-		c.mdcontainerGetter = func() metadatax.MetadataContainer {
+	if c.mdContainerInitFunc == nil {
+		c.mdContainerInitFunc = func() metadatax.MetadataContainer {
 			return metadatax.New(metadatax.WithPrefix(name))
 		}
 	}
 
-	if c.metadataGetter == nil {
-		c.metadataGetter = NewGCPMetadataGetter()
+	if c.gcpMetadataClient == nil {
+		c.gcpMetadataClient = NewGCPMetadataClient()
 	}
 
 	return c
 }
 
 func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContainer, error) {
-	md := c.mdcontainerGetter()
+	md := c.mdContainerInitFunc()
 
 	if !c.isOnGoogle() {
 		return md, nil
 	}
 
-	instance, err := c.metadataGetter.GetInstanceMetadata(ctx)
+	instance, err := c.gcpMetadataClient.GetInstanceMetadata(ctx)
 	if err != nil {
 		return md, err
 	}

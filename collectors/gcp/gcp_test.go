@@ -7,8 +7,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/gezacorp/metadatax/collectors/gcp"
 	"github.com/gohobby/assert"
+
+	"github.com/gezacorp/metadatax/collectors/gcp"
 )
 
 type mdgetter struct{}
@@ -85,7 +86,7 @@ func TestGetMetadata(t *testing.T) {
 	}
 
 	collector := gcp.New(
-		gcp.CollectorWithMetadataGetter(&mdgetter{}),
+		gcp.CollectorWithGCPMetadataClient(&mdgetter{}),
 		gcp.CollectorWithForceOnGoogle(),
 	)
 	md, err := collector.GetMetadata(context.Background())
