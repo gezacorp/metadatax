@@ -13,7 +13,7 @@ import (
 	"github.com/gezacorp/metadatax/collectors/procfs"
 )
 
-type rawData struct {
+type processInfo struct {
 	exe     string
 	hash    string
 	cmdLine string
@@ -25,32 +25,32 @@ type rawData struct {
 	envs    []string
 }
 
-func (g *rawData) NameWithContext(ctx context.Context) (string, error) {
-	return g.name, nil
+func (i *processInfo) NameWithContext(ctx context.Context) (string, error) {
+	return i.name, nil
 }
 
-func (g *rawData) CmdlineWithContext(ctx context.Context) (string, error) {
-	return g.cmdLine, nil
+func (i *processInfo) CmdlineWithContext(ctx context.Context) (string, error) {
+	return i.cmdLine, nil
 }
 
-func (g *rawData) UidsWithContext(ctx context.Context) ([]int32, error) {
-	return []int32{g.uid, g.uid, g.uid, g.uid}, nil
+func (i *processInfo) UidsWithContext(ctx context.Context) ([]int32, error) {
+	return []int32{i.uid, i.uid, i.uid, i.uid}, nil
 }
 
-func (g *rawData) GidsWithContext(ctx context.Context) ([]int32, error) {
-	return []int32{g.gid, g.gid, g.gid, g.gid}, nil
+func (i *processInfo) GidsWithContext(ctx context.Context) ([]int32, error) {
+	return []int32{i.gid, i.gid, i.gid, i.gid}, nil
 }
 
-func (g *rawData) GroupsWithContext(ctx context.Context) ([]int32, error) {
-	return g.agids, nil
+func (i *processInfo) GroupsWithContext(ctx context.Context) ([]int32, error) {
+	return i.agids, nil
 }
 
-func (g *rawData) EnvironWithContext(ctx context.Context) ([]string, error) {
-	return g.envs, nil
+func (i *processInfo) EnvironWithContext(ctx context.Context) ([]string, error) {
+	return i.envs, nil
 }
 
-func (g *rawData) ExeWithContext(ctx context.Context) (string, error) {
-	return g.exe, nil
+func (i *processInfo) ExeWithContext(ctx context.Context) (string, error) {
+	return i.exe, nil
 }
 
 func TestGetMetadata(t *testing.T) {
@@ -62,7 +62,7 @@ func TestGetMetadata(t *testing.T) {
 	_, err = file.WriteString(fileContent)
 	assert.Nil(t, err)
 
-	rawData := &rawData{
+	processInfo := &processInfo{
 		exe:     file.Name(),
 		hash:    digest.SHA256.FromString(fileContent).String(),
 		cmdLine: "./test-command",
@@ -75,27 +75,32 @@ func TestGetMetadata(t *testing.T) {
 	}
 
 	expected := map[string][]string{
-		"process:binary:path":    {rawData.exe},
-		"process:binary:hash":    {rawData.hash},
-		"process:cmdline":        {rawData.cmdLine},
-		"process:gid":            {strconv.Itoa(int(rawData.gid))},
-		"process:gid:additional": {strconv.Itoa(int(rawData.agids[0])), strconv.Itoa(int(rawData.agids[1])), strconv.Itoa(int(rawData.agids[2])), strconv.Itoa(int(rawData.agids[3]))},
-		"process:gid:effective":  {strconv.Itoa(int(rawData.gid))},
-		"process:gid:real":       {strconv.Itoa(int(rawData.gid))},
-		"process:name":           {rawData.name},
-		"process:pid":            {strconv.Itoa(int(rawData.pid))},
-		"process:uid":            {strconv.Itoa(int(rawData.uid))},
-		"process:uid:effective":  {strconv.Itoa(int(rawData.uid))},
-		"process:uid:real":       {strconv.Itoa(int(rawData.uid))},
+		"process:binary:path":    {processInfo.exe},
+		"process:binary:hash":    {processInfo.hash},
+		"process:cmdline":        {processInfo.cmdLine},
+		"process:gid":            {strconv.Itoa(int(processInfo.gid))},
+		"process:gid:additional": {strconv.Itoa(int(processInfo.agids[0])), strconv.Itoa(int(processInfo.agids[1])), strconv.Itoa(int(processInfo.agids[2])), strconv.Itoa(int(processInfo.agids[3]))},
+		"process:gid:effective":  {strconv.Itoa(int(processInfo.gid))},
+		"process:gid:real":       {strconv.Itoa(int(processInfo.gid))},
+		"process:name":           {processInfo.name},
+		"process:pid":            {strconv.Itoa(int(processInfo.pid))},
+		"process:uid":            {strconv.Itoa(int(processInfo.uid))},
+		"process:uid:effective":  {strconv.Itoa(int(processInfo.uid))},
+		"process:uid:real":       {strconv.Itoa(int(processInfo.uid))},
 	}
 
-	ctx := metadatax.ContextWithPID(context.Background(), int32(rawData.pid))
+	ctx := metadatax.ContextWithPID(context.Background(), int32(processInfo.pid))
 	md, err := procfs.New(
-		procfs.CollectorWithRawDataGetterFunc(
-			func(ctx context.Context, pid int32) (procfs.RawData, error) {
-				return rawData, nil
+		procfs.CollectorWithProcessInfoFunc(
+			func(ctx context.Context, pid int32) (procfs.ProcessInfo, error) {
+				return processInfo, nil
 			},
 		),
+		procfs.CollectorWithMetadataContainerInitFunc(func() metadatax.MetadataContainer {
+			return metadatax.New(
+				metadatax.WithPrefix("process"),
+			)
+		}),
 	).GetMetadata(ctx)
 	assert.Nil(t, err)
 	assert.Equal(t, expected, map[string][]string(md.GetLabels()))
