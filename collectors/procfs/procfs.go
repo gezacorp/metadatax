@@ -37,6 +37,12 @@ type MetadataGetter interface {
 
 type CollectorOption func(*collector)
 
+func CollectorWithExtractENVs() CollectorOption {
+	return func(c *collector) {
+		c.extractEnvs = true
+	}
+}
+
 func CollectorWithMetadataGetter(mdGetter MetadataGetter) CollectorOption {
 	return func(c *collector) {
 		c.metadataGetter = mdGetter
