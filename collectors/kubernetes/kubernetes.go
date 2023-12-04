@@ -33,7 +33,7 @@ type collector struct {
 	kubeletClient kubelet.Client
 	podResolver   PodResolver
 
-	mdcontainerGetter func() metadatax.MetadataContainer
+	mdContainerInitFunc func() metadatax.MetadataContainer
 }
 
 type CollectorOption func(*collector)
@@ -50,9 +50,9 @@ func WithPodResolver(resolver PodResolver) CollectorOption {
 	}
 }
 
-func CollectorWithMetadataContainerGetter(getter func() metadatax.MetadataContainer) CollectorOption {
+func CollectorWithMetadataContainerInitFunc(fn func() metadatax.MetadataContainer) CollectorOption {
 	return func(c *collector) {
-		c.mdcontainerGetter = getter
+		c.mdContainerInitFunc = fn
 	}
 }
 
@@ -67,8 +67,8 @@ func New(opts ...CollectorOption) metadatax.Collector {
 		c.podResolver = c
 	}
 
-	if c.mdcontainerGetter == nil {
-		c.mdcontainerGetter = func() metadatax.MetadataContainer {
+	if c.mdContainerInitFunc == nil {
+		c.mdContainerInitFunc = func() metadatax.MetadataContainer {
 			return metadatax.New(metadatax.WithPrefix(name))
 		}
 	}
@@ -77,7 +77,7 @@ func New(opts ...CollectorOption) metadatax.Collector {
 }
 
 func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContainer, error) {
-	md := c.mdcontainerGetter()
+	md := c.mdContainerInitFunc()
 
 	pid, found := metadatax.PIDFromContext(ctx)
 	if !found {
