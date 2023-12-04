@@ -14,22 +14,24 @@ const (
 )
 
 type collector struct {
-	hostMetadataGetter func() (*hostmetadata.OS, error)
+	getHostMetadataFunc GetHostMetadataFunc
 
-	mdcontainerGetter func() metadatax.MetadataContainer
+	mdContainerInitFunc func() metadatax.MetadataContainer
 }
 
 type CollectorOption func(*collector)
 
-func CollectorWithHostMetadataGetter(getter func() (*hostmetadata.OS, error)) CollectorOption {
+type GetHostMetadataFunc func() (*hostmetadata.OS, error)
+
+func CollectorWithGetHostMetadataFunc(fn GetHostMetadataFunc) CollectorOption {
 	return func(c *collector) {
-		c.hostMetadataGetter = getter
+		c.getHostMetadataFunc = fn
 	}
 }
 
-func CollectorWithMetadataContainerGetter(getter func() metadatax.MetadataContainer) CollectorOption {
+func CollectorWithMetadataContainerInitFunc(fn func() metadatax.MetadataContainer) CollectorOption {
 	return func(c *collector) {
-		c.mdcontainerGetter = getter
+		c.mdContainerInitFunc = fn
 	}
 }
 
@@ -40,12 +42,12 @@ func New(opts ...CollectorOption) metadatax.Collector {
 		f(c)
 	}
 
-	if c.hostMetadataGetter == nil {
-		c.hostMetadataGetter = hostmetadata.GetOS
+	if c.getHostMetadataFunc == nil {
+		c.getHostMetadataFunc = hostmetadata.GetOS
 	}
 
-	if c.mdcontainerGetter == nil {
-		c.mdcontainerGetter = func() metadatax.MetadataContainer {
+	if c.mdContainerInitFunc == nil {
+		c.mdContainerInitFunc = func() metadatax.MetadataContainer {
 			return metadatax.New(metadatax.WithPrefix(name))
 		}
 	}
@@ -54,18 +56,18 @@ func New(opts ...CollectorOption) metadatax.Collector {
 }
 
 func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContainer, error) {
-	info, err := c.hostMetadataGetter()
+	metadata, err := c.getHostMetadataFunc()
 	if err != nil {
 		return nil, err
 	}
 
-	md := c.mdcontainerGetter()
-	md.AddLabel("name", info.HostOSName)
-	md.AddLabel("version", info.HostLinuxVersion)
+	md := c.mdContainerInitFunc()
+	md.AddLabel("name", metadata.HostOSName)
+	md.AddLabel("version", metadata.HostLinuxVersion)
 
 	kernel := md.Segment("kernel")
-	kernel.AddLabel("release", strings.Trim(strings.Join([]string{info.HostKernelName, info.HostKernelRelease}, "-"), "-"))
-	kernel.AddLabel("version", info.HostKernelVersion)
+	kernel.AddLabel("release", strings.Trim(strings.Join([]string{metadata.HostKernelName, metadata.HostKernelRelease}, "-"), "-"))
+	kernel.AddLabel("version", metadata.HostKernelVersion)
 
 	return md, nil
 }
