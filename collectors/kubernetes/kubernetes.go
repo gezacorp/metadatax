@@ -32,7 +32,8 @@ type podContext struct {
 type collector struct {
 	kubeletClient kubelet.Client
 	podResolver   PodResolver
-	mdcontainer   metadatax.MetadataContainer
+
+	mdcontainerGetter func() metadatax.MetadataContainer
 }
 
 type CollectorOption func(*collector)
@@ -49,9 +50,9 @@ func WithPodResolver(resolver PodResolver) CollectorOption {
 	}
 }
 
-func CollectorWithMetadataContainer(mdcontainer metadatax.MetadataContainer) CollectorOption {
+func CollectorWithMetadataContainerGetter(getter func() metadatax.MetadataContainer) CollectorOption {
 	return func(c *collector) {
-		c.mdcontainer = mdcontainer
+		c.mdcontainerGetter = getter
 	}
 }
 
@@ -66,14 +67,18 @@ func New(opts ...CollectorOption) metadatax.Collector {
 		c.podResolver = c
 	}
 
-	if c.mdcontainer == nil {
-		c.mdcontainer = metadatax.New(metadatax.WithPrefix(name))
+	if c.mdcontainerGetter == nil {
+		c.mdcontainerGetter = func() metadatax.MetadataContainer {
+			return metadatax.New(metadatax.WithPrefix(name))
+		}
 	}
 
 	return c
 }
 
 func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContainer, error) {
+	md := c.mdcontainerGetter()
+
 	pid, found := metadatax.PIDFromContext(ctx)
 	if !found {
 		return nil, metadatax.PIDNotFoundError
@@ -85,7 +90,7 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 	}
 
 	if podID == "" || containerID == "" {
-		return c.mdcontainer, nil
+		return md, nil
 	}
 
 	pods, err := c.kubeletClient.GetPods(ctx)
@@ -95,7 +100,7 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 
 	podctx, found := c.getPodContext(podID, containerID, pods)
 	if !found {
-		return c.mdcontainer, nil
+		return md, nil
 	}
 
 	getters := []func(podContext, metadatax.MetadataContainer){
@@ -107,10 +112,10 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 	}
 
 	for _, f := range getters {
-		f(podctx, c.mdcontainer)
+		f(podctx, md)
 	}
 
-	return c.mdcontainer, nil
+	return md, nil
 }
 
 func (c *collector) pod(podctx podContext, md metadatax.MetadataContainer) {

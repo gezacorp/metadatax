@@ -27,7 +27,7 @@ type collector struct {
 	ignoreMissingContainerIDError bool
 	ignoreNoSuchContainerError    bool
 
-	mdcontainer metadatax.MetadataContainer
+	mdcontainerGetter func() metadatax.MetadataContainer
 }
 
 type MetadataGetter interface {
@@ -76,9 +76,9 @@ func WithIgnoreNoSuchContainerError() CollectorOption {
 	}
 }
 
-func CollectorWithMetadataContainer(mdcontainer metadatax.MetadataContainer) CollectorOption {
+func CollectorWithMetadataContainerGetter(getter func() metadatax.MetadataContainer) CollectorOption {
 	return func(c *collector) {
-		c.mdcontainer = mdcontainer
+		c.mdcontainerGetter = getter
 	}
 }
 
@@ -101,14 +101,18 @@ func New(opts ...CollectorOption) (metadatax.Collector, error) {
 		c.containerIDGetter = c
 	}
 
-	if c.mdcontainer == nil {
-		c.mdcontainer = metadatax.New(metadatax.WithPrefix(name))
+	if c.mdcontainerGetter == nil {
+		c.mdcontainerGetter = func() metadatax.MetadataContainer {
+			return metadatax.New(metadatax.WithPrefix(name))
+		}
 	}
 
 	return c, nil
 }
 
 func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContainer, error) {
+	md := c.mdcontainerGetter()
+
 	pid, found := metadatax.PIDFromContext(ctx)
 	if !found {
 		return nil, metadatax.PIDNotFoundError
@@ -120,7 +124,7 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 	}
 	if containerID == "" {
 		if c.ignoreMissingContainerIDError {
-			return c.mdcontainer, nil
+			return md, nil
 		}
 
 		return nil, errors.WithDetails(ContainerIDNotFoundError, "pid", pid)
@@ -128,7 +132,7 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 
 	containerJSON, err := c.metadataGetter.ContainerInspect(ctx, containerID)
 	if c.ignoreNoSuchContainerError && client.IsErrNotFound(err) {
-		return c.mdcontainer, nil
+		return md, nil
 	}
 	if err != nil {
 		return nil, err
@@ -143,10 +147,10 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 	}
 
 	for _, f := range getters {
-		f(containerJSON, c.mdcontainer)
+		f(containerJSON, md)
 	}
 
-	return c.mdcontainer, nil
+	return md, nil
 }
 
 func (c *collector) GetContainerIDFromPID(pid int) (string, error) {

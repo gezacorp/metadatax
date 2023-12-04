@@ -13,9 +13,9 @@ const (
 )
 
 type collector struct {
-	metadataGetter MetadataGetter
-	onAzure        bool
-	mdcontainer    metadatax.MetadataContainer
+	metadataGetter    MetadataGetter
+	onAzure           bool
+	mdcontainerGetter func() metadatax.MetadataContainer
 }
 
 type CollectorOption func(*collector)
@@ -37,9 +37,9 @@ func CollectorWithMetadataGetter(metadataGetter MetadataGetter) CollectorOption 
 	}
 }
 
-func CollectorWithMetadataContainer(mdcontainer metadatax.MetadataContainer) CollectorOption {
+func CollectorWithMetadataContainerGetter(getter func() metadatax.MetadataContainer) CollectorOption {
 	return func(c *collector) {
-		c.mdcontainer = mdcontainer
+		c.mdcontainerGetter = getter
 	}
 }
 
@@ -50,8 +50,10 @@ func New(opts ...CollectorOption) metadatax.Collector {
 		f(c)
 	}
 
-	if c.mdcontainer == nil {
-		c.mdcontainer = metadatax.New(metadatax.WithPrefix(name))
+	if c.mdcontainerGetter == nil {
+		c.mdcontainerGetter = func() metadatax.MetadataContainer {
+			return metadatax.New(metadatax.WithPrefix(name))
+		}
 	}
 
 	if c.metadataGetter == nil {
@@ -62,18 +64,20 @@ func New(opts ...CollectorOption) metadatax.Collector {
 }
 
 func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContainer, error) {
+	md := c.mdcontainerGetter()
+
 	if !c.isOnAzure() {
-		return c.mdcontainer, nil
+		return md, nil
 	}
 
 	instance, err := c.metadataGetter.GetInstanceMetadata(ctx)
 	if err != nil {
-		return c.mdcontainer, err
+		return md, err
 	}
 
 	lb, err := c.metadataGetter.GetLoadBalancerMetadata(ctx)
 	if err != nil {
-		return c.mdcontainer, err
+		return md, err
 	}
 
 	getters := []func(metadatax.MetadataContainer, *AzureMetadataInstance, *AzureMetadataLoadBalancer){
@@ -85,10 +89,10 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 	}
 
 	for _, f := range getters {
-		f(c.mdcontainer, instance, lb)
+		f(md, instance, lb)
 	}
 
-	return c.mdcontainer, nil
+	return md, nil
 }
 
 func (c *collector) base(md metadatax.MetadataContainer, instance *AzureMetadataInstance, lb *AzureMetadataLoadBalancer) {
@@ -120,14 +124,14 @@ func (c *collector) vm(md metadatax.MetadataContainer, instance *AzureMetadataIn
 }
 
 func (c *collector) tags(md metadatax.MetadataContainer, instance *AzureMetadataInstance, lb *AzureMetadataLoadBalancer) {
-	tmd := c.mdcontainer.Segment("tag")
+	tmd := md.Segment("tag")
 	for _, tag := range instance.Compute.TagsList {
 		tmd.AddLabel(tag.Name, tag.Value)
 	}
 }
 
 func (c *collector) network(md metadatax.MetadataContainer, instance *AzureMetadataInstance, lb *AzureMetadataLoadBalancer) {
-	nmd := c.mdcontainer.Segment("network")
+	nmd := md.Segment("network")
 	for _, iface := range instance.Network.Interface {
 		nmd.AddLabel("mac", iface.MacAddress)
 

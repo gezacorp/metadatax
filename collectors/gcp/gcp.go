@@ -17,7 +17,8 @@ const (
 type collector struct {
 	metadataGetter MetadataGetter
 	onGoogle       bool
-	mdcontainer    metadatax.MetadataContainer
+
+	mdcontainerGetter func() metadatax.MetadataContainer
 }
 
 type CollectorOption func(*collector)
@@ -38,9 +39,9 @@ func CollectorWithMetadataGetter(metadataGetter MetadataGetter) CollectorOption 
 	}
 }
 
-func CollectorWithMetadataContainer(mdcontainer metadatax.MetadataContainer) CollectorOption {
+func CollectorWithMetadataContainerGetter(getter func() metadatax.MetadataContainer) CollectorOption {
 	return func(c *collector) {
-		c.mdcontainer = mdcontainer
+		c.mdcontainerGetter = getter
 	}
 }
 
@@ -51,8 +52,10 @@ func New(opts ...CollectorOption) metadatax.Collector {
 		f(c)
 	}
 
-	if c.mdcontainer == nil {
-		c.mdcontainer = metadatax.New(metadatax.WithPrefix(name))
+	if c.mdcontainerGetter == nil {
+		c.mdcontainerGetter = func() metadatax.MetadataContainer {
+			return metadatax.New(metadatax.WithPrefix(name))
+		}
 	}
 
 	if c.metadataGetter == nil {
@@ -63,13 +66,15 @@ func New(opts ...CollectorOption) metadatax.Collector {
 }
 
 func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContainer, error) {
+	md := c.mdcontainerGetter()
+
 	if !c.isOnGoogle() {
-		return c.mdcontainer, nil
+		return md, nil
 	}
 
 	instance, err := c.metadataGetter.GetInstanceMetadata(ctx)
 	if err != nil {
-		return c.mdcontainer, err
+		return md, err
 	}
 
 	getters := []func(metadatax.MetadataContainer, *GCPMetadataInstance){
@@ -81,10 +86,10 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 	}
 
 	for _, f := range getters {
-		f(c.mdcontainer, instance)
+		f(md, instance)
 	}
 
-	return c.mdcontainer, nil
+	return md, nil
 }
 
 func (c *collector) base(md metadatax.MetadataContainer, instance *GCPMetadataInstance) {

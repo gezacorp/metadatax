@@ -15,7 +15,8 @@ const (
 
 type collector struct {
 	hostMetadataGetter func() (*hostmetadata.OS, error)
-	mdcontainer        metadatax.MetadataContainer
+
+	mdcontainerGetter func() metadatax.MetadataContainer
 }
 
 type CollectorOption func(*collector)
@@ -26,9 +27,9 @@ func CollectorWithHostMetadataGetter(getter func() (*hostmetadata.OS, error)) Co
 	}
 }
 
-func CollectorWithMetadataContainer(mdcontainer metadatax.MetadataContainer) CollectorOption {
+func CollectorWithMetadataContainerGetter(getter func() metadatax.MetadataContainer) CollectorOption {
 	return func(c *collector) {
-		c.mdcontainer = mdcontainer
+		c.mdcontainerGetter = getter
 	}
 }
 
@@ -43,8 +44,10 @@ func New(opts ...CollectorOption) metadatax.Collector {
 		c.hostMetadataGetter = hostmetadata.GetOS
 	}
 
-	if c.mdcontainer == nil {
-		c.mdcontainer = metadatax.New(metadatax.WithPrefix(name))
+	if c.mdcontainerGetter == nil {
+		c.mdcontainerGetter = func() metadatax.MetadataContainer {
+			return metadatax.New(metadatax.WithPrefix(name))
+		}
 	}
 
 	return c
@@ -56,7 +59,7 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 		return nil, err
 	}
 
-	md := c.mdcontainer
+	md := c.mdcontainerGetter()
 	md.AddLabel("name", info.HostOSName)
 	md.AddLabel("version", info.HostLinuxVersion)
 

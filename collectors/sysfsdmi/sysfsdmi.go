@@ -17,7 +17,8 @@ const (
 type collector struct {
 	metadataGetter MetadataGetter
 	hasSysfs       bool
-	mdcontainer    metadatax.MetadataContainer
+
+	mdcontainerGetter func() metadatax.MetadataContainer
 }
 
 type CollectorOption func(*collector)
@@ -32,9 +33,9 @@ func CollectorWithMetadataGetter(metadataGetter MetadataGetter) CollectorOption 
 	}
 }
 
-func CollectorWithMetadataContainer(mdcontainer metadatax.MetadataContainer) CollectorOption {
+func CollectorWithMetadataContainerGetter(getter func() metadatax.MetadataContainer) CollectorOption {
 	return func(c *collector) {
-		c.mdcontainer = mdcontainer
+		c.mdcontainerGetter = getter
 	}
 }
 
@@ -51,8 +52,10 @@ func New(opts ...CollectorOption) metadatax.Collector {
 		f(c)
 	}
 
-	if c.mdcontainer == nil {
-		c.mdcontainer = metadatax.New(metadatax.WithPrefix(name))
+	if c.mdcontainerGetter == nil {
+		c.mdcontainerGetter = func() metadatax.MetadataContainer {
+			return metadatax.New(metadatax.WithPrefix(name))
+		}
 	}
 
 	if c.metadataGetter == nil {
@@ -63,8 +66,10 @@ func New(opts ...CollectorOption) metadatax.Collector {
 }
 
 func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContainer, error) {
+	md := c.mdcontainerGetter()
+
 	if !c.hasSysFS() {
-		return c.mdcontainer, nil
+		return md, nil
 	}
 
 	getters := []func(metadatax.MetadataContainer){
@@ -74,10 +79,10 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 	}
 
 	for _, f := range getters {
-		f(c.mdcontainer)
+		f(md)
 	}
 
-	return c.mdcontainer, nil
+	return md, nil
 }
 
 func (c *collector) GetContent(key string) string {
@@ -90,7 +95,7 @@ func (c *collector) GetContent(key string) string {
 }
 
 func (c *collector) bios(md metadatax.MetadataContainer) {
-	c.mdcontainer.Segment("bios").
+	md.Segment("bios").
 		AddLabel("date", c.metadataGetter.GetContent("bios_date")).
 		AddLabel("release", c.metadataGetter.GetContent("bios_release")).
 		AddLabel("vendor", c.metadataGetter.GetContent("bios_vendor")).
@@ -98,7 +103,7 @@ func (c *collector) bios(md metadatax.MetadataContainer) {
 }
 
 func (c *collector) chassis(md metadatax.MetadataContainer) {
-	c.mdcontainer.Segment("chassis").
+	md.Segment("chassis").
 		AddLabel("asset-tag", c.metadataGetter.GetContent("chassis_asset_tag")).
 		AddLabel("serial", c.metadataGetter.GetContent("chassis_serial")).
 		AddLabel("type", c.metadataGetter.GetContent("chassis_type")).
@@ -107,7 +112,7 @@ func (c *collector) chassis(md metadatax.MetadataContainer) {
 }
 
 func (c *collector) product(md metadatax.MetadataContainer) {
-	c.mdcontainer.Segment("product").
+	md.Segment("product").
 		AddLabel("family", c.metadataGetter.GetContent("product_family")).
 		AddLabel("name", c.metadataGetter.GetContent("product_name")).
 		AddLabel("serial", c.metadataGetter.GetContent("product_serial")).

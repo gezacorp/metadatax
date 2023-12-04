@@ -21,9 +21,10 @@ type IMDSClient interface {
 }
 
 type collector struct {
-	imdsClient  IMDSClient
-	mdcontainer metadatax.MetadataContainer
-	onEC2       bool
+	imdsClient IMDSClient
+	onEC2      bool
+
+	mdcontainerGetter func() metadatax.MetadataContainer
 }
 
 type CollectorOption func(*collector)
@@ -40,9 +41,9 @@ func WithForceOnEC2() CollectorOption {
 	}
 }
 
-func CollectorWithMetadataContainer(mdcontainer metadatax.MetadataContainer) CollectorOption {
+func CollectorWithMetadataContainerGetter(getter func() metadatax.MetadataContainer) CollectorOption {
 	return func(c *collector) {
-		c.mdcontainer = mdcontainer
+		c.mdcontainerGetter = getter
 	}
 }
 
@@ -62,16 +63,20 @@ func New(opts ...CollectorOption) (metadatax.Collector, error) {
 		c.imdsClient = NewIMDSClient(imds.NewFromConfig(cfg))
 	}
 
-	if c.mdcontainer == nil {
-		c.mdcontainer = metadatax.New(metadatax.WithPrefix(name))
+	if c.mdcontainerGetter == nil {
+		c.mdcontainerGetter = func() metadatax.MetadataContainer {
+			return metadatax.New(metadatax.WithPrefix(name))
+		}
 	}
 
 	return c, nil
 }
 
 func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContainer, error) {
+	md := c.mdcontainerGetter()
+
 	if !c.isOnEC2() {
-		return c.mdcontainer, nil
+		return md, nil
 	}
 
 	getters := []func(context.Context, metadatax.MetadataContainer){
@@ -82,10 +87,10 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 	}
 
 	for _, f := range getters {
-		f(ctx, c.mdcontainer)
+		f(ctx, md)
 	}
 
-	return c.mdcontainer, nil
+	return md, nil
 }
 
 func (c *collector) base(ctx context.Context, md metadatax.MetadataContainer) {
