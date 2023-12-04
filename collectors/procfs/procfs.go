@@ -21,11 +21,13 @@ const (
 type collector struct {
 	extractEnvs bool
 
-	metadataGetter    MetadataGetter
+	rawDataGetterFunc RawDataGetterFunc
 	mdcontainerGetter func() metadatax.MetadataContainer
 }
 
-type MetadataGetter interface {
+type RawDataGetterFunc func(ctx context.Context, pid int32) (RawData, error)
+
+type RawData interface {
 	NameWithContext(ctx context.Context) (string, error)
 	CmdlineWithContext(ctx context.Context) (string, error)
 	UidsWithContext(ctx context.Context) ([]int32, error)
@@ -43,9 +45,9 @@ func CollectorWithExtractENVs() CollectorOption {
 	}
 }
 
-func CollectorWithMetadataGetter(mdGetter MetadataGetter) CollectorOption {
+func CollectorWithRawDataGetterFunc(fn RawDataGetterFunc) CollectorOption {
 	return func(c *collector) {
-		c.metadataGetter = mdGetter
+		c.rawDataGetterFunc = fn
 	}
 }
 
@@ -60,6 +62,12 @@ func New(opts ...CollectorOption) metadatax.Collector {
 
 	for _, f := range opts {
 		f(c)
+	}
+
+	if c.rawDataGetterFunc == nil {
+		c.rawDataGetterFunc = func(ctx context.Context, pid int32) (RawData, error) {
+			return process.NewProcessWithContext(ctx, pid)
+		}
 	}
 
 	if c.mdcontainerGetter == nil {
@@ -79,17 +87,14 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 		return nil, metadatax.PIDNotFoundError
 	}
 
-	if c.metadataGetter == nil {
-		proc, err := process.NewProcessWithContext(ctx, pid)
-		if err != nil {
-			return nil, errors.WrapIf(err, "could not create new process instance")
-		}
-		c.metadataGetter = proc
+	data, err := c.rawDataGetterFunc(ctx, pid)
+	if err != nil {
+		return nil, errors.WrapIf(err, "could not create new process instance")
 	}
 
 	md.AddLabel("pid", strconv.Itoa(int(pid)))
 
-	getters := []func(context.Context, MetadataGetter, metadatax.MetadataContainer){
+	getters := []func(context.Context, RawData, metadatax.MetadataContainer){
 		c.base,
 		c.uids,
 		c.gids,
@@ -101,24 +106,24 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 	}
 
 	for _, f := range getters {
-		f(ctx, c.metadataGetter, md)
+		f(ctx, data, md)
 	}
 
 	return md, nil
 }
 
-func (c *collector) base(ctx context.Context, mdGetter MetadataGetter, md metadatax.MetadataContainer) {
-	if name, err := mdGetter.NameWithContext(ctx); err == nil {
+func (c *collector) base(ctx context.Context, data RawData, md metadatax.MetadataContainer) {
+	if name, err := data.NameWithContext(ctx); err == nil {
 		md.AddLabel("name", name)
 	}
 
-	if parts, err := mdGetter.CmdlineWithContext(ctx); err == nil {
+	if parts, err := data.CmdlineWithContext(ctx); err == nil {
 		md.AddLabel("cmdline", parts)
 	}
 }
 
-func (c *collector) uids(ctx context.Context, mdGetter MetadataGetter, md metadatax.MetadataContainer) {
-	if uids, err := mdGetter.UidsWithContext(ctx); err == nil {
+func (c *collector) uids(ctx context.Context, data RawData, md metadatax.MetadataContainer) {
+	if uids, err := data.UidsWithContext(ctx); err == nil {
 		if len(uids) == 4 {
 			uidmd := md.Segment("uid")
 			uidmd.AddLabel("", strconv.Itoa(int(uids[1])))
@@ -128,10 +133,10 @@ func (c *collector) uids(ctx context.Context, mdGetter MetadataGetter, md metada
 	}
 }
 
-func (c *collector) gids(ctx context.Context, mdGetter MetadataGetter, md metadatax.MetadataContainer) {
+func (c *collector) gids(ctx context.Context, data RawData, md metadatax.MetadataContainer) {
 	gidmd := md.Segment("gid")
 
-	if gids, err := mdGetter.GidsWithContext(ctx); err == nil {
+	if gids, err := data.GidsWithContext(ctx); err == nil {
 		if len(gids) == 4 {
 			gidmd.AddLabel("", strconv.Itoa(int(gids[1])))
 			gidmd.AddLabel("real", strconv.Itoa(int(gids[0])))
@@ -139,17 +144,17 @@ func (c *collector) gids(ctx context.Context, mdGetter MetadataGetter, md metada
 		}
 	}
 
-	if groups, err := mdGetter.GroupsWithContext(ctx); err == nil {
+	if groups, err := data.GroupsWithContext(ctx); err == nil {
 		for _, groupID := range groups {
 			gidmd.AddLabel("additional", strconv.Itoa(int(groupID)))
 		}
 	}
 }
 
-func (c *collector) envs(ctx context.Context, mdGetter MetadataGetter, md metadatax.MetadataContainer) {
+func (c *collector) envs(ctx context.Context, data RawData, md metadatax.MetadataContainer) {
 	envmd := md.Segment("env")
 
-	if envs, err := mdGetter.EnvironWithContext(ctx); err == nil {
+	if envs, err := data.EnvironWithContext(ctx); err == nil {
 		for _, env := range envs {
 			if !strings.Contains(env, "=") {
 				continue
@@ -160,10 +165,10 @@ func (c *collector) envs(ctx context.Context, mdGetter MetadataGetter, md metada
 	}
 }
 
-func (c *collector) binary(ctx context.Context, mdGetter MetadataGetter, md metadatax.MetadataContainer) {
+func (c *collector) binary(ctx context.Context, data RawData, md metadatax.MetadataContainer) {
 	bmd := md.Segment("binary")
 
-	if exe, err := mdGetter.ExeWithContext(ctx); err == nil {
+	if exe, err := data.ExeWithContext(ctx); err == nil {
 		bmd.AddLabel("path", exe)
 
 		file, err := os.Open(exe)

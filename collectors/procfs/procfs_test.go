@@ -13,7 +13,7 @@ import (
 	"github.com/gezacorp/metadatax/collectors/procfs"
 )
 
-type metadataGetter struct {
+type rawData struct {
 	exe     string
 	hash    string
 	cmdLine string
@@ -25,31 +25,31 @@ type metadataGetter struct {
 	envs    []string
 }
 
-func (g *metadataGetter) NameWithContext(ctx context.Context) (string, error) {
+func (g *rawData) NameWithContext(ctx context.Context) (string, error) {
 	return g.name, nil
 }
 
-func (g *metadataGetter) CmdlineWithContext(ctx context.Context) (string, error) {
+func (g *rawData) CmdlineWithContext(ctx context.Context) (string, error) {
 	return g.cmdLine, nil
 }
 
-func (g *metadataGetter) UidsWithContext(ctx context.Context) ([]int32, error) {
+func (g *rawData) UidsWithContext(ctx context.Context) ([]int32, error) {
 	return []int32{g.uid, g.uid, g.uid, g.uid}, nil
 }
 
-func (g *metadataGetter) GidsWithContext(ctx context.Context) ([]int32, error) {
+func (g *rawData) GidsWithContext(ctx context.Context) ([]int32, error) {
 	return []int32{g.gid, g.gid, g.gid, g.gid}, nil
 }
 
-func (g *metadataGetter) GroupsWithContext(ctx context.Context) ([]int32, error) {
+func (g *rawData) GroupsWithContext(ctx context.Context) ([]int32, error) {
 	return g.agids, nil
 }
 
-func (g *metadataGetter) EnvironWithContext(ctx context.Context) ([]string, error) {
+func (g *rawData) EnvironWithContext(ctx context.Context) ([]string, error) {
 	return g.envs, nil
 }
 
-func (g *metadataGetter) ExeWithContext(ctx context.Context) (string, error) {
+func (g *rawData) ExeWithContext(ctx context.Context) (string, error) {
 	return g.exe, nil
 }
 
@@ -62,7 +62,7 @@ func TestGetMetadata(t *testing.T) {
 	_, err = file.WriteString(fileContent)
 	assert.Nil(t, err)
 
-	getter := &metadataGetter{
+	rawData := &rawData{
 		exe:     file.Name(),
 		hash:    digest.SHA256.FromString(fileContent).String(),
 		cmdLine: "./test-command",
@@ -75,22 +75,28 @@ func TestGetMetadata(t *testing.T) {
 	}
 
 	expected := map[string][]string{
-		"process:binary:path":    {getter.exe},
-		"process:binary:hash":    {getter.hash},
-		"process:cmdline":        {getter.cmdLine},
-		"process:gid":            {strconv.Itoa(int(getter.gid))},
-		"process:gid:additional": {strconv.Itoa(int(getter.agids[0])), strconv.Itoa(int(getter.agids[1])), strconv.Itoa(int(getter.agids[2])), strconv.Itoa(int(getter.agids[3]))},
-		"process:gid:effective":  {strconv.Itoa(int(getter.gid))},
-		"process:gid:real":       {strconv.Itoa(int(getter.gid))},
-		"process:name":           {getter.name},
-		"process:pid":            {strconv.Itoa(int(getter.pid))},
-		"process:uid":            {strconv.Itoa(int(getter.uid))},
-		"process:uid:effective":  {strconv.Itoa(int(getter.uid))},
-		"process:uid:real":       {strconv.Itoa(int(getter.uid))},
+		"process:binary:path":    {rawData.exe},
+		"process:binary:hash":    {rawData.hash},
+		"process:cmdline":        {rawData.cmdLine},
+		"process:gid":            {strconv.Itoa(int(rawData.gid))},
+		"process:gid:additional": {strconv.Itoa(int(rawData.agids[0])), strconv.Itoa(int(rawData.agids[1])), strconv.Itoa(int(rawData.agids[2])), strconv.Itoa(int(rawData.agids[3]))},
+		"process:gid:effective":  {strconv.Itoa(int(rawData.gid))},
+		"process:gid:real":       {strconv.Itoa(int(rawData.gid))},
+		"process:name":           {rawData.name},
+		"process:pid":            {strconv.Itoa(int(rawData.pid))},
+		"process:uid":            {strconv.Itoa(int(rawData.uid))},
+		"process:uid:effective":  {strconv.Itoa(int(rawData.uid))},
+		"process:uid:real":       {strconv.Itoa(int(rawData.uid))},
 	}
 
-	ctx := metadatax.ContextWithPID(context.Background(), int32(getter.pid))
-	md, err := procfs.New(procfs.CollectorWithMetadataGetter(getter)).GetMetadata(ctx)
+	ctx := metadatax.ContextWithPID(context.Background(), int32(rawData.pid))
+	md, err := procfs.New(
+		procfs.CollectorWithRawDataGetterFunc(
+			func(ctx context.Context, pid int32) (procfs.RawData, error) {
+				return rawData, nil
+			},
+		),
+	).GetMetadata(ctx)
 	assert.Nil(t, err)
 	assert.Equal(t, expected, map[string][]string(md.GetLabels()))
 }
