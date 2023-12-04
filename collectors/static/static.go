@@ -7,15 +7,15 @@ import (
 )
 
 type collector struct {
-	mdcontainerGetter func() metadatax.MetadataContainer
-	mdcontainer       metadatax.MetadataContainer
+	mdContainerInitFunc func() metadatax.MetadataContainer
+	mdContainer         metadatax.MetadataContainer
 }
 
 type CollectorOption func(*collector)
 
-func CollectorWithMetadataContainerGetter(getter func() metadatax.MetadataContainer) CollectorOption {
+func CollectorWithMetadataContainerInitFunc(fn func() metadatax.MetadataContainer) CollectorOption {
 	return func(c *collector) {
-		c.mdcontainerGetter = getter
+		c.mdContainerInitFunc = fn
 	}
 }
 
@@ -26,18 +26,18 @@ func New(labels map[string][]string, opts ...CollectorOption) metadatax.Collecto
 		f(c)
 	}
 
-	if c.mdcontainerGetter == nil {
-		c.mdcontainerGetter = func() metadatax.MetadataContainer {
+	if c.mdContainerInitFunc == nil {
+		c.mdContainerInitFunc = func() metadatax.MetadataContainer {
 			return metadatax.New()
 		}
 	}
 
-	c.mdcontainer = c.mdcontainerGetter()
-	c.mdcontainer.AddLabels(labels)
+	c.mdContainer = c.mdContainerInitFunc()
+	c.mdContainer.AddLabels(labels)
 
 	return c
 }
 
 func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContainer, error) {
-	return c.mdcontainer, nil
+	return c.mdContainer, nil
 }
