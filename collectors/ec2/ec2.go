@@ -24,7 +24,7 @@ type collector struct {
 	imdsClient IMDSClient
 	onEC2      bool
 
-	mdcontainerGetter func() metadatax.MetadataContainer
+	mdContainerInitFunc func() metadatax.MetadataContainer
 }
 
 type CollectorOption func(*collector)
@@ -41,9 +41,9 @@ func WithForceOnEC2() CollectorOption {
 	}
 }
 
-func CollectorWithMetadataContainerGetter(getter func() metadatax.MetadataContainer) CollectorOption {
+func CollectorWithMetadataContainerInitFunc(fn func() metadatax.MetadataContainer) CollectorOption {
 	return func(c *collector) {
-		c.mdcontainerGetter = getter
+		c.mdContainerInitFunc = fn
 	}
 }
 
@@ -63,8 +63,8 @@ func New(opts ...CollectorOption) (metadatax.Collector, error) {
 		c.imdsClient = NewIMDSClient(imds.NewFromConfig(cfg))
 	}
 
-	if c.mdcontainerGetter == nil {
-		c.mdcontainerGetter = func() metadatax.MetadataContainer {
+	if c.mdContainerInitFunc == nil {
+		c.mdContainerInitFunc = func() metadatax.MetadataContainer {
 			return metadatax.New(metadatax.WithPrefix(name))
 		}
 	}
@@ -73,7 +73,7 @@ func New(opts ...CollectorOption) (metadatax.Collector, error) {
 }
 
 func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContainer, error) {
-	md := c.mdcontainerGetter()
+	md := c.mdContainerInitFunc()
 
 	if !c.isOnEC2() {
 		return md, nil

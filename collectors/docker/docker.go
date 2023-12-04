@@ -76,9 +76,9 @@ func WithIgnoreNoSuchContainerError() CollectorOption {
 	}
 }
 
-func CollectorWithMetadataContainerInitFunc(getter func() metadatax.MetadataContainer) CollectorOption {
+func CollectorWithMetadataContainerInitFunc(fn func() metadatax.MetadataContainer) CollectorOption {
 	return func(c *collector) {
-		c.mdContainerInitFunc = getter
+		c.mdContainerInitFunc = fn
 	}
 }
 
