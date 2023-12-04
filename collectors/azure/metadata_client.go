@@ -3,10 +3,11 @@ package azure
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 
 	"emperror.dev/errors"
+
+	"github.com/gezacorp/metadatax"
 )
 
 const (
@@ -14,18 +15,14 @@ const (
 	defaultVersion = "2023-07-01"
 )
 
-type HTTPClient interface {
-	Do(*http.Request) (*http.Response, error)
-}
-
 type metadataGetter struct {
-	httpClient HTTPClient
+	httpClient metadatax.HTTPClient
 	version    string
 }
 
 type MetadataGetterOption func(*metadataGetter)
 
-func AzureMetadataGetterWithHTTPClient(httpClient HTTPClient) MetadataGetterOption {
+func AzureMetadataGetterWithHTTPClient(httpClient metadatax.HTTPClient) MetadataGetterOption {
 	return func(g *metadataGetter) {
 		g.httpClient = httpClient
 	}
@@ -37,7 +34,7 @@ func AzureMetadataGetterWithVersion(version string) MetadataGetterOption {
 	}
 }
 
-func NewAzureMetadataGetter(opts ...MetadataGetterOption) MetadataGetter {
+func NewAzureMetadataClient(opts ...MetadataGetterOption) AzureMetadata {
 	g := &metadataGetter{}
 
 	for _, f := range opts {
@@ -95,20 +92,5 @@ func (g *metadataGetter) getMetadata(ctx context.Context, path string) ([]byte, 
 	q.Add("api-version", g.version)
 	req.URL.RawQuery = q.Encode()
 
-	resp, err := g.httpClient.Do(req)
-	if err != nil {
-		return nil, errors.WrapIf(err, "could not perform http request")
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, errors.Errorf("non-200 response status: %s", resp.Status)
-	}
-
-	content, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, errors.WrapIf(err, "could not read response")
-	}
-
-	return content, nil
+	return metadatax.SendHTTPGetRequest(ctx, g.httpClient, req)
 }

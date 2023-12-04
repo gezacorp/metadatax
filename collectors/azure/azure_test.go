@@ -81,7 +81,9 @@ func TestGetMetadata(t *testing.T) {
 	}
 
 	collector := azure.New(
-		azure.CollectorWithMetadataGetter(&mdgetter{}),
+		azure.CollectorWithGetAzureMetadataFunc(func(ctx context.Context) azure.AzureMetadata {
+			return &mdgetter{}
+		}),
 		azure.CollectorWithForceOnAzure(),
 	)
 	md, err := collector.GetMetadata(context.Background())

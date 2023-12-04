@@ -13,14 +13,17 @@ const (
 )
 
 type collector struct {
-	metadataGetter    MetadataGetter
-	onAzure           bool
-	mdcontainerGetter func() metadatax.MetadataContainer
+	onAzure              bool
+	getAzureMetadataFunc GetAzureMetadataFunc
+
+	mdContainerInitFunc func() metadatax.MetadataContainer
 }
 
 type CollectorOption func(*collector)
 
-type MetadataGetter interface {
+type GetAzureMetadataFunc func(ctx context.Context) AzureMetadata
+
+type AzureMetadata interface {
 	GetInstanceMetadata(ctx context.Context) (*AzureMetadataInstance, error)
 	GetLoadBalancerMetadata(ctx context.Context) (*AzureMetadataLoadBalancer, error)
 }
@@ -31,15 +34,15 @@ func CollectorWithForceOnAzure() CollectorOption {
 	}
 }
 
-func CollectorWithMetadataGetter(metadataGetter MetadataGetter) CollectorOption {
+func CollectorWithGetAzureMetadataFunc(fn GetAzureMetadataFunc) CollectorOption {
 	return func(c *collector) {
-		c.metadataGetter = metadataGetter
+		c.getAzureMetadataFunc = fn
 	}
 }
 
-func CollectorWithMetadataContainerGetter(getter func() metadatax.MetadataContainer) CollectorOption {
+func CollectorWithMetadataContainerInitFunc(getter func() metadatax.MetadataContainer) CollectorOption {
 	return func(c *collector) {
-		c.mdcontainerGetter = getter
+		c.mdContainerInitFunc = getter
 	}
 }
 
@@ -50,32 +53,36 @@ func New(opts ...CollectorOption) metadatax.Collector {
 		f(c)
 	}
 
-	if c.mdcontainerGetter == nil {
-		c.mdcontainerGetter = func() metadatax.MetadataContainer {
+	if c.mdContainerInitFunc == nil {
+		c.mdContainerInitFunc = func() metadatax.MetadataContainer {
 			return metadatax.New(metadatax.WithPrefix(name))
 		}
 	}
 
-	if c.metadataGetter == nil {
-		c.metadataGetter = NewAzureMetadataGetter()
+	if c.getAzureMetadataFunc == nil {
+		c.getAzureMetadataFunc = func(ctx context.Context) AzureMetadata {
+			return NewAzureMetadataClient()
+		}
 	}
 
 	return c
 }
 
 func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContainer, error) {
-	md := c.mdcontainerGetter()
+	md := c.mdContainerInitFunc()
 
 	if !c.isOnAzure() {
 		return md, nil
 	}
 
-	instance, err := c.metadataGetter.GetInstanceMetadata(ctx)
+	data := c.getAzureMetadataFunc(ctx)
+
+	instance, err := data.GetInstanceMetadata(ctx)
 	if err != nil {
 		return md, err
 	}
 
-	lb, err := c.metadataGetter.GetLoadBalancerMetadata(ctx)
+	lb, err := data.GetLoadBalancerMetadata(ctx)
 	if err != nil {
 		return md, err
 	}
