@@ -15,27 +15,27 @@ const (
 )
 
 type collector struct {
-	metadataGetter MetadataGetter
 	hasSysfs       bool
+	sysFSDMIClient SysFSDMIClient
 
-	mdcontainerGetter func() metadatax.MetadataContainer
+	mdContainerInitFunc func() metadatax.MetadataContainer
 }
 
 type CollectorOption func(*collector)
 
-type MetadataGetter interface {
+type SysFSDMIClient interface {
 	GetContent(key string) string
 }
 
-func CollectorWithMetadataGetter(metadataGetter MetadataGetter) CollectorOption {
+func CollectorWithSysFSDMIClient(sysFSDMIClient SysFSDMIClient) CollectorOption {
 	return func(c *collector) {
-		c.metadataGetter = metadataGetter
+		c.sysFSDMIClient = sysFSDMIClient
 	}
 }
 
-func CollectorWithMetadataContainerGetter(getter func() metadatax.MetadataContainer) CollectorOption {
+func CollectorWithMetadataContainerInitFunc(fn func() metadatax.MetadataContainer) CollectorOption {
 	return func(c *collector) {
-		c.mdcontainerGetter = getter
+		c.mdContainerInitFunc = fn
 	}
 }
 
@@ -52,21 +52,21 @@ func New(opts ...CollectorOption) metadatax.Collector {
 		f(c)
 	}
 
-	if c.mdcontainerGetter == nil {
-		c.mdcontainerGetter = func() metadatax.MetadataContainer {
+	if c.mdContainerInitFunc == nil {
+		c.mdContainerInitFunc = func() metadatax.MetadataContainer {
 			return metadatax.New(metadatax.WithPrefix(name))
 		}
 	}
 
-	if c.metadataGetter == nil {
-		c.metadataGetter = c
+	if c.sysFSDMIClient == nil {
+		c.sysFSDMIClient = c
 	}
 
 	return c
 }
 
 func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContainer, error) {
-	md := c.mdcontainerGetter()
+	md := c.mdContainerInitFunc()
 
 	if !c.hasSysFS() {
 		return md, nil
@@ -96,28 +96,28 @@ func (c *collector) GetContent(key string) string {
 
 func (c *collector) bios(md metadatax.MetadataContainer) {
 	md.Segment("bios").
-		AddLabel("date", c.metadataGetter.GetContent("bios_date")).
-		AddLabel("release", c.metadataGetter.GetContent("bios_release")).
-		AddLabel("vendor", c.metadataGetter.GetContent("bios_vendor")).
-		AddLabel("version", c.metadataGetter.GetContent("bios_version"))
+		AddLabel("date", c.sysFSDMIClient.GetContent("bios_date")).
+		AddLabel("release", c.sysFSDMIClient.GetContent("bios_release")).
+		AddLabel("vendor", c.sysFSDMIClient.GetContent("bios_vendor")).
+		AddLabel("version", c.sysFSDMIClient.GetContent("bios_version"))
 }
 
 func (c *collector) chassis(md metadatax.MetadataContainer) {
 	md.Segment("chassis").
-		AddLabel("asset-tag", c.metadataGetter.GetContent("chassis_asset_tag")).
-		AddLabel("serial", c.metadataGetter.GetContent("chassis_serial")).
-		AddLabel("type", c.metadataGetter.GetContent("chassis_type")).
-		AddLabel("vendor", c.metadataGetter.GetContent("chassis_vendor")).
-		AddLabel("version", c.metadataGetter.GetContent("chassis_version"))
+		AddLabel("asset-tag", c.sysFSDMIClient.GetContent("chassis_asset_tag")).
+		AddLabel("serial", c.sysFSDMIClient.GetContent("chassis_serial")).
+		AddLabel("type", c.sysFSDMIClient.GetContent("chassis_type")).
+		AddLabel("vendor", c.sysFSDMIClient.GetContent("chassis_vendor")).
+		AddLabel("version", c.sysFSDMIClient.GetContent("chassis_version"))
 }
 
 func (c *collector) product(md metadatax.MetadataContainer) {
 	md.Segment("product").
-		AddLabel("family", c.metadataGetter.GetContent("product_family")).
-		AddLabel("name", c.metadataGetter.GetContent("product_name")).
-		AddLabel("serial", c.metadataGetter.GetContent("product_serial")).
-		AddLabel("sku", c.metadataGetter.GetContent("product_sku")).
-		AddLabel("version", c.metadataGetter.GetContent("product_version"))
+		AddLabel("family", c.sysFSDMIClient.GetContent("product_family")).
+		AddLabel("name", c.sysFSDMIClient.GetContent("product_name")).
+		AddLabel("serial", c.sysFSDMIClient.GetContent("product_serial")).
+		AddLabel("sku", c.sysFSDMIClient.GetContent("product_sku")).
+		AddLabel("version", c.sysFSDMIClient.GetContent("product_version"))
 }
 
 func (c *collector) hasSysFS() bool {

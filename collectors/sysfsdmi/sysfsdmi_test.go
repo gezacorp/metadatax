@@ -9,9 +9,9 @@ import (
 	"github.com/gezacorp/metadatax/collectors/sysfsdmi"
 )
 
-type mdgetter struct{}
+type sysFSDMIClient struct{}
 
-func (g *mdgetter) GetContent(key string) string {
+func (*sysFSDMIClient) GetContent(key string) string {
 	data := map[string]string{
 		"bios_date":         "03/01/2023",
 		"bios_release":      "0.0",
@@ -54,7 +54,7 @@ func TestGetMetadata(t *testing.T) {
 	}
 
 	collector := sysfsdmi.New(
-		sysfsdmi.CollectorWithMetadataGetter(&mdgetter{}),
+		sysfsdmi.CollectorWithSysFSDMIClient(&sysFSDMIClient{}),
 		sysfsdmi.CollectorWithForceHasSysFS(),
 	)
 	md, err := collector.GetMetadata(context.Background())
