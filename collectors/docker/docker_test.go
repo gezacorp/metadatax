@@ -20,9 +20,9 @@ func (g *containerIDGetter) GetContainerIDFromPID(pid int) (string, error) {
 	return "test", nil
 }
 
-type metadataGetter struct{}
+type containerInspector struct{}
 
-func (g *metadataGetter) ContainerInspect(ctx context.Context, containerID string) (types.ContainerJSON, error) {
+func (*containerInspector) ContainerInspect(ctx context.Context, containerID string) (types.ContainerJSON, error) {
 	file, err := os.Open("testdata/container.json")
 	if err != nil {
 		return types.ContainerJSON{}, err
@@ -44,7 +44,7 @@ func TestGetMetadata(t *testing.T) {
 	t.Parallel()
 
 	collector, err := docker.New(
-		docker.WithMetadataGetter(&metadataGetter{}),
+		docker.WithContainerInspector(&containerInspector{}),
 		docker.WithContainerIDGetter(&containerIDGetter{}),
 	)
 	assert.Nil(t, err)

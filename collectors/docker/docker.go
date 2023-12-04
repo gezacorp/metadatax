@@ -22,15 +22,15 @@ var (
 type collector struct {
 	socketPath                    string
 	dockerClientOpts              []client.Opt
-	metadataGetter                MetadataGetter
+	containerInspector            ContainerInspector
 	containerIDGetter             ContainerIDGetter
 	ignoreMissingContainerIDError bool
 	ignoreNoSuchContainerError    bool
 
-	mdcontainerGetter func() metadatax.MetadataContainer
+	mdContainerInitFunc func() metadatax.MetadataContainer
 }
 
-type MetadataGetter interface {
+type ContainerInspector interface {
 	ContainerInspect(ctx context.Context, containerID string) (types.ContainerJSON, error)
 }
 
@@ -52,9 +52,9 @@ func WithSocketPath(socketPath string) CollectorOption {
 	}
 }
 
-func WithMetadataGetter(metadataGetter MetadataGetter) CollectorOption {
+func WithContainerInspector(inspector ContainerInspector) CollectorOption {
 	return func(c *collector) {
-		c.metadataGetter = metadataGetter
+		c.containerInspector = inspector
 	}
 }
 
@@ -76,9 +76,9 @@ func WithIgnoreNoSuchContainerError() CollectorOption {
 	}
 }
 
-func CollectorWithMetadataContainerGetter(getter func() metadatax.MetadataContainer) CollectorOption {
+func CollectorWithMetadataContainerInitFunc(getter func() metadatax.MetadataContainer) CollectorOption {
 	return func(c *collector) {
-		c.mdcontainerGetter = getter
+		c.mdContainerInitFunc = getter
 	}
 }
 
@@ -89,11 +89,11 @@ func New(opts ...CollectorOption) (metadatax.Collector, error) {
 		f(c)
 	}
 
-	if c.metadataGetter == nil {
+	if c.containerInspector == nil {
 		if dc, err := c.getDockerClient(); err != nil {
 			return nil, errors.WrapIf(err, "could not get docker client")
 		} else {
-			c.metadataGetter = dc
+			c.containerInspector = dc
 		}
 	}
 
@@ -101,8 +101,8 @@ func New(opts ...CollectorOption) (metadatax.Collector, error) {
 		c.containerIDGetter = c
 	}
 
-	if c.mdcontainerGetter == nil {
-		c.mdcontainerGetter = func() metadatax.MetadataContainer {
+	if c.mdContainerInitFunc == nil {
+		c.mdContainerInitFunc = func() metadatax.MetadataContainer {
 			return metadatax.New(metadatax.WithPrefix(name))
 		}
 	}
@@ -111,7 +111,7 @@ func New(opts ...CollectorOption) (metadatax.Collector, error) {
 }
 
 func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContainer, error) {
-	md := c.mdcontainerGetter()
+	md := c.mdContainerInitFunc()
 
 	pid, found := metadatax.PIDFromContext(ctx)
 	if !found {
@@ -130,7 +130,7 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 		return nil, errors.WithDetails(ContainerIDNotFoundError, "pid", pid)
 	}
 
-	containerJSON, err := c.metadataGetter.ContainerInspect(ctx, containerID)
+	containerJSON, err := c.containerInspector.ContainerInspect(ctx, containerID)
 	if c.ignoreNoSuchContainerError && client.IsErrNotFound(err) {
 		return md, nil
 	}
