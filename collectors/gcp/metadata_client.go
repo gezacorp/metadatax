@@ -41,7 +41,10 @@ func NewGCPMetadataClient(opts ...MetadataGetterOption) GCPMetadataClient {
 }
 
 func (g *metadataGetter) GetInstanceMetadata(ctx context.Context) (*GCPMetadataInstance, error) {
-	content, err := g.getMetadata(ctx, "/instance/")
+	content, err := g.getMetadata(ctx, "/instance/", map[string]string{
+		"recursive": "true",
+		"alt":       "json",
+	})
 	if err != nil {
 		return nil, errors.WithStackIf(err)
 	}
@@ -54,7 +57,31 @@ func (g *metadataGetter) GetInstanceMetadata(ctx context.Context) (*GCPMetadataI
 	return &instance, nil
 }
 
-func (g *metadataGetter) getMetadata(ctx context.Context, path string) ([]byte, error) {
+func (g *metadataGetter) GetProjectMetadata(ctx context.Context) (*GCPProjectMetadata, error) {
+	content, err := g.getMetadata(ctx, "/project/", map[string]string{
+		"recursive": "true",
+		"alt":       "json",
+	})
+	if err != nil {
+		return nil, errors.WithStackIf(err)
+	}
+
+	var project GCPProjectMetadata
+	if err := json.Unmarshal(content, &project); err != nil {
+		return nil, errors.WithStackIf(err)
+	}
+
+	return &project, nil
+}
+
+func (g *metadataGetter) GetInstanceIdentityToken(ctx context.Context, audience string, format string) ([]byte, error) {
+	return g.getMetadata(ctx, "/instance/service-accounts/default/identity", map[string]string{
+		"audience": audience,
+		"format":   format,
+	})
+}
+
+func (g *metadataGetter) getMetadata(ctx context.Context, path string, queryValues map[string]string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", baseURL+path, nil)
 	if err != nil {
 		return nil, errors.WrapIf(err, "could not instantiate http request")
@@ -62,8 +89,9 @@ func (g *metadataGetter) getMetadata(ctx context.Context, path string) ([]byte, 
 	req.Header.Add("Metadata-Flavor", "Google")
 
 	q := req.URL.Query()
-	q.Add("recursive", "true")
-	q.Add("alt", "json")
+	for k, v := range queryValues {
+		q.Add(k, v)
+	}
 	req.URL.RawQuery = q.Encode()
 
 	return metadatax.SendHTTPGetRequest(ctx, g.httpClient, req)

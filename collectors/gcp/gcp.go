@@ -25,6 +25,8 @@ type CollectorOption func(*collector)
 
 type GCPMetadataClient interface {
 	GetInstanceMetadata(ctx context.Context) (*GCPMetadataInstance, error)
+	GetProjectMetadata(ctx context.Context) (*GCPProjectMetadata, error)
+	GetInstanceIdentityToken(ctx context.Context, audience string, format string) ([]byte, error)
 }
 
 func CollectorWithForceOnGoogle() CollectorOption {
@@ -86,21 +88,34 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 	}
 
 	for _, f := range getters {
-		f(md, instance)
+		f(md.Segment("instance"), instance)
 	}
+
+	project, err := c.gcpMetadataClient.GetProjectMetadata(ctx)
+	if err != nil {
+		return md, err
+	}
+	ps := md.Segment("project")
+	if project.ID != "" {
+		ps.AddLabel("id", project.ID)
+	}
+	if project.NumericID > 0 {
+		ps.AddLabel("id:numeric", strconv.FormatInt(project.NumericID, 10))
+	}
+	ps.Segment("attribute").AddLabels(metadatax.ConvertMapStringToLabels(project.Attributes))
 
 	return md, nil
 }
 
 func (c *collector) base(md metadatax.MetadataContainer, instance *GCPMetadataInstance) {
-	md.AddLabel("id", strconv.Itoa(int(instance.ID)))
+	md.AddLabel("id", strconv.FormatInt(instance.ID, 10))
 	md.AddLabel("name", instance.Name)
 	md.AddLabel("cpu-platform", instance.CPUPlatform)
 
 	attributes := metadatax.ConvertMapStringToLabels(instance.Attributes)
 	// filter out ssh public keys
 	delete(attributes, "ssh-keys")
-	md.Segment("attributes").AddLabels(attributes)
+	md.Segment("attribute").AddLabels(attributes)
 
 	for _, tag := range instance.Tags {
 		md.AddLabel("tag", tag)
@@ -110,7 +125,6 @@ func (c *collector) base(md metadatax.MetadataContainer, instance *GCPMetadataIn
 		md.Segment("image").
 			AddLabel("project", p[1]).
 			AddLabel("name", p[4])
-
 	}
 
 	if p := strings.Split(instance.MachineType, "/"); len(p) == 4 {

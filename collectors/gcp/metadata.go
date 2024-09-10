@@ -70,3 +70,9 @@ type GCPMetadataServiceAccount struct {
 type GCPMetadataVirtualClock struct {
 	DriftToken string `json:"driftToken,omitempty"`
 }
+
+type GCPProjectMetadata struct {
+	ID         string            `json:"projectId,omitempty"`
+	NumericID  int64             `json:"numericProjectId,omitempty"`
+	Attributes map[string]string `json:"attributes,omitempty"`
+}
