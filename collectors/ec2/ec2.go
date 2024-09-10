@@ -5,10 +5,6 @@ import (
 	"context"
 	"os"
 
-	"emperror.dev/errors"
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
-
 	"github.com/gezacorp/metadatax"
 )
 
@@ -18,6 +14,7 @@ const (
 
 type IMDSClient interface {
 	GetMetadataContent(ctx context.Context, path string) string
+	GetDynamicMetadataContent(ctx context.Context, path string) ([]byte, error)
 }
 
 type collector struct {
@@ -55,12 +52,11 @@ func New(opts ...CollectorOption) (metadatax.Collector, error) {
 	}
 
 	if c.imdsClient == nil {
-		cfg, err := config.LoadDefaultConfig(context.Background())
-		if err != nil {
-			return nil, errors.WrapIf(err, "could not get config for EC2 client")
+		if ic, err := NewIMDSDefaultConfig(context.Background()); err != nil {
+			return nil, err
+		} else {
+			c.imdsClient = ic
 		}
-
-		c.imdsClient = NewIMDSClient(imds.NewFromConfig(cfg))
 	}
 
 	if c.mdContainerInitFunc == nil {

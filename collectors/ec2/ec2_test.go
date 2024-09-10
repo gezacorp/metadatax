@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"emperror.dev/errors"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/gezacorp/metadatax/collectors/ec2"
@@ -15,6 +16,10 @@ type imdsClient struct {
 
 func (c *imdsClient) GetMetadataContent(ctx context.Context, path string) string {
 	return c.data[path]
+}
+
+func (c *imdsClient) GetDynamicMetadataContent(ctx context.Context, path string) ([]byte, error) {
+	return nil, errors.NewPlain("GetDynamicMetadataContent is not implemented")
 }
 
 func TestGetMetadata(t *testing.T) {

@@ -5,6 +5,8 @@ import (
 	"context"
 	"io"
 
+	"emperror.dev/errors"
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
 )
 
@@ -18,20 +20,45 @@ func NewIMDSClient(client *imds.Client) IMDSClient {
 	}
 }
 
+func NewIMDSDefaultConfig(ctx context.Context) (IMDSClient, error) {
+	cfg, err := config.LoadDefaultConfig(context.Background())
+	if err != nil {
+		return nil, errors.WrapIf(err, "could not get config for EC2 client")
+	}
+
+	return NewIMDSClient(imds.NewFromConfig(cfg)), nil
+}
+
 func (c *imdsClient) GetMetadataContent(ctx context.Context, path string) string {
 	response, err := c.client.GetMetadata(ctx, &imds.GetMetadataInput{Path: path})
 	if err != nil {
 		return ""
 	}
 
-	return c.readContent(response.Content)
-}
-
-func (c *imdsClient) readContent(reader io.ReadCloser) string {
-	buff := new(bytes.Buffer)
-	if _, err := buff.ReadFrom(reader); err != nil {
+	content, err := c.readContent(response.Content)
+	if err != nil {
 		return ""
 	}
 
-	return buff.String()
+	return string(content)
+}
+
+func (c *imdsClient) GetDynamicMetadataContent(ctx context.Context, path string) ([]byte, error) {
+	response, err := c.client.GetDynamicData(ctx, &imds.GetDynamicDataInput{
+		Path: path,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return c.readContent(response.Content)
+}
+
+func (c *imdsClient) readContent(reader io.ReadCloser) ([]byte, error) {
+	buff := new(bytes.Buffer)
+	if _, err := buff.ReadFrom(reader); err != nil {
+		return nil, err
+	}
+
+	return buff.Bytes(), nil
 }
