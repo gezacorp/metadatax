@@ -1,6 +1,8 @@
 package metadatax
 
 import (
+	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -16,10 +18,13 @@ type MetadataContainer interface {
 
 type MetadataLabels interface {
 	GetLabels() Labels
+	GetLabelValue(name string) string
+	GetLabelValues(name string) ([]string, bool)
 	GetLabelsSlice() []SlicedLabel
 	AddLabel(name string, value ...string) MetadataContainer
 	AddLabels(Labels) MetadataContainer
 	Segment(name string, opts ...MetadataOption) MetadataContainer
+	String() string
 }
 
 type Labels map[string][]string
@@ -140,11 +145,51 @@ func (m *metadata) Segment(name string, opts ...MetadataOption) MetadataContaine
 	return New(append(inheritedOpts, opts...)...)
 }
 
+func (m *metadata) GetLabelValue(name string) string {
+	m.rlock()
+	defer m.runlock()
+
+	s, ok := m.Labels[name]
+	if ok && len(s) > 0 {
+		return s[0]
+	}
+
+	return ""
+}
+
+func (m *metadata) GetLabelValues(name string) ([]string, bool) {
+	m.rlock()
+	defer m.runlock()
+
+	s, ok := m.Labels[name]
+
+	return s, ok
+}
+
 func (m *metadata) GetLabels() Labels {
 	m.rlock()
 	defer m.runlock()
 
 	return m.Labels
+}
+
+func (m *metadata) String() string {
+	var output string
+
+	slice := slices.Clone(m.GetLabelsSlice())
+	sort.SliceStable(slice, func(i, j int) bool {
+		if strings.Compare(slice[i].Name, slice[j].Name) < 0 {
+			return true
+		}
+
+		return false
+	})
+
+	for _, l := range m.GetLabelsSlice() {
+		output += fmt.Sprintf("%s=%s\n", l.Name, l.Value)
+	}
+
+	return output
 }
 
 func (m *metadata) GetLabelsSlice() []SlicedLabel {
