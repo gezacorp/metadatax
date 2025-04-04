@@ -178,11 +178,7 @@ func (m *metadata) String() string {
 
 	slice := slices.Clone(m.GetLabelsSlice())
 	sort.SliceStable(slice, func(i, j int) bool {
-		if strings.Compare(slice[i].Name, slice[j].Name) < 0 {
-			return true
-		}
-
-		return false
+		return strings.Compare(slice[i].Name, slice[j].Name) < 0
 	})
 
 	for _, l := range m.GetLabelsSlice() {
