@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "crypto/sha256"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -171,7 +172,8 @@ func (c *collector) binary(ctx context.Context, processInfo ProcessInfo, md meta
 	if exe, err := processInfo.ExeWithContext(ctx); err == nil {
 		bmd.AddLabel("path", exe)
 
-		file, err := os.Open(exe)
+		pid, _ := metadatax.PIDFromContext(ctx)
+		file, err := os.Open(filepath.Join(procPath(), strconv.Itoa(int(pid)), "exe"))
 		if err != nil {
 			return
 		}
@@ -183,4 +185,13 @@ func (c *collector) binary(ctx context.Context, processInfo ProcessInfo, md meta
 
 		bmd.AddLabel("hash", hash.String())
 	}
+}
+
+func procPath() string {
+	p := os.Getenv("HOST_PROC")
+	if p != "" {
+		return p
+	}
+
+	return "/proc"
 }
