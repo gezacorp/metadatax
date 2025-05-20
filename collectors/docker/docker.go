@@ -15,19 +15,16 @@ const (
 	name = "docker"
 )
 
-var (
-	ContainerIDNotFoundError = errors.Sentinel("could not find container id for pid")
-)
+var ContainerIDNotFoundError = errors.Sentinel("could not find container id for pid")
 
 type collector struct {
-	socketPath                    string
-	dockerClientOpts              []client.Opt
-	containerInspector            ContainerInspector
-	containerIDGetter             ContainerIDGetter
-	ignoreMissingContainerIDError bool
-	ignoreNoSuchContainerError    bool
+	socketPath         string
+	dockerClientOpts   []client.Opt
+	containerInspector ContainerInspector
+	containerIDGetter  ContainerIDGetter
 
 	mdContainerInitFunc func() metadatax.MetadataContainer
+	skipOnSoftError     bool
 }
 
 type ContainerInspector interface {
@@ -64,21 +61,15 @@ func WithContainerIDGetter(containerIDGetter ContainerIDGetter) CollectorOption 
 	}
 }
 
-func WithIgnoreMissingContainerIDError() CollectorOption {
-	return func(c *collector) {
-		c.ignoreMissingContainerIDError = true
-	}
-}
-
-func WithIgnoreNoSuchContainerError() CollectorOption {
-	return func(c *collector) {
-		c.ignoreNoSuchContainerError = true
-	}
-}
-
 func CollectorWithMetadataContainerInitFunc(fn func() metadatax.MetadataContainer) CollectorOption {
 	return func(c *collector) {
 		c.mdContainerInitFunc = fn
+	}
+}
+
+func WithSkipOnSoftError() CollectorOption {
+	return func(c *collector) {
+		c.skipOnSoftError = true
 	}
 }
 
@@ -122,8 +113,9 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 	if err != nil {
 		return nil, errors.WrapIfWithDetails(err, "could not get cgroups from pid", "pid", pid)
 	}
+
 	if containerID == "" {
-		if c.ignoreMissingContainerIDError {
+		if c.skipOnSoftError {
 			return md, nil
 		}
 
@@ -131,9 +123,10 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 	}
 
 	containerJSON, err := c.containerInspector.ContainerInspect(ctx, containerID)
-	if c.ignoreNoSuchContainerError && client.IsErrNotFound(err) {
+	if c.skipOnSoftError && client.IsErrNotFound(err) {
 		return md, nil
 	}
+
 	if err != nil {
 		return nil, err
 	}

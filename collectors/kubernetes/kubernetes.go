@@ -34,6 +34,7 @@ type collector struct {
 	podResolver   PodResolver
 
 	mdContainerInitFunc func() metadatax.MetadataContainer
+	skipOnSoftError     bool
 }
 
 type CollectorOption func(*collector)
@@ -53,6 +54,12 @@ func WithPodResolver(resolver PodResolver) CollectorOption {
 func CollectorWithMetadataContainerInitFunc(fn func() metadatax.MetadataContainer) CollectorOption {
 	return func(c *collector) {
 		c.mdContainerInitFunc = fn
+	}
+}
+
+func WithSkipOnSoftError() CollectorOption {
+	return func(c *collector) {
+		c.skipOnSoftError = true
 	}
 }
 
@@ -85,7 +92,7 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 	}
 
 	podID, containerID, err := c.podResolver.GetPodAndContainerID(pid)
-	if err != nil {
+	if err != nil && !c.skipOnSoftError {
 		return nil, errors.WithDetails(err, "pid", pid)
 	}
 
@@ -194,7 +201,7 @@ func (c *collector) images(podctx podContext, md metadatax.MetadataContainer) {
 }
 
 func (c *collector) GetPodAndContainerID(pid int32) (string, string, error) {
-	var k8sPodContainerIDRegex = regexp.MustCompile(`([a-z0-9/.-]+)?([/-]pod)?((?i)[a-z0-9-_]{36}).*((?i)[a-z0-9]{64})`)
+	k8sPodContainerIDRegex := regexp.MustCompile(`([a-z0-9/.-]+)?([/-]pod)?((?i)[a-z0-9-_]{36}).*((?i)[a-z0-9]{64})`)
 
 	cgroups, err := GetCgroupsForPID(int(pid))
 	if err != nil {
