@@ -174,6 +174,9 @@ func (c *collector) binary(ctx context.Context, processInfo ProcessInfo, md meta
 
 		pid, _ := metadatax.PIDFromContext(ctx)
 		file, err := os.Open(filepath.Join(procPath(), strconv.Itoa(int(pid)), "exe"))
+		if errors.Is(err, os.ErrNotExist) {
+			file, err = os.Open(exe)
+		}
 		if err != nil {
 			return
 		}

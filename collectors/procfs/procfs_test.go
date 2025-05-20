@@ -59,6 +59,7 @@ func TestGetMetadata(t *testing.T) {
 	fileContent := "test"
 	file, err := os.CreateTemp("", "mxtest*")
 	assert.Nil(t, err)
+	defer os.Remove(file.Name())
 	_, err = file.WriteString(fileContent)
 	assert.Nil(t, err)
 
