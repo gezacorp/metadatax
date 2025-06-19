@@ -21,7 +21,7 @@ func NewIMDSClient(client *imds.Client) IMDSClient {
 }
 
 func NewIMDSDefaultConfig(ctx context.Context) (IMDSClient, error) {
-	cfg, err := config.LoadDefaultConfig(context.Background())
+	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
 		return nil, errors.WrapIf(err, "could not get config for EC2 client")
 	}
