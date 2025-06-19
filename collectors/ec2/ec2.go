@@ -153,59 +153,46 @@ func (c *collector) isOnEC2(ctx context.Context) bool {
 		return true
 	}
 
-	// Check Xen hypervisor UUID starts with "ec2"
-	hypervisorUUIDPath := "/sys/hypervisor/uuid"
-	if fileExists(hypervisorUUIDPath) {
-		if data, err := os.ReadFile(hypervisorUUIDPath); err == nil {
-			if bytes.HasPrefix(bytes.ToLower(data), []byte("ec2")) {
-				c.onEC2 = true
-				return true
-			}
-		}
+	checks := map[string]func(data []byte) bool{
+		"/sys/hypervisor/uuid": func(data []byte) bool {
+			return bytes.HasPrefix(bytes.ToLower(data), []byte("ec2"))
+		},
+		"/sys/class/dmi/id/bios_vendor": func(data []byte) bool {
+			return bytes.Contains(bytes.ToLower(data), []byte("amazon"))
+		},
+		"/sys/class/dmi/id/bios_version": func(data []byte) bool {
+			return bytes.Contains(bytes.ToLower(data), []byte("amazon"))
+		},
+		"/sys/class/dmi/id/sys_vendor": func(data []byte) bool {
+			return bytes.Contains(bytes.ToLower(data), []byte("amazon"))
+		},
 	}
 
-	// Check DMI BIOS vendor for "Amazon"
-	biosVendorPath := "/sys/class/dmi/id/bios_vendor"
-	if fileExists(biosVendorPath) {
-		if data, err := os.ReadFile(biosVendorPath); err == nil {
-			if bytes.Contains(bytes.ToLower(data), []byte("amazon")) {
-				c.onEC2 = true
-				return true
-			}
+	for path, check := range checks {
+		if !fileExists(path) {
+			continue
 		}
-	}
-
-	// Check DMI BIOS version for "amazon"
-	biosVersionPath := "/sys/class/dmi/id/bios_version"
-	if fileExists(biosVersionPath) {
-		if data, err := os.ReadFile(biosVersionPath); err == nil {
-			if bytes.Contains(bytes.ToLower(data), []byte("amazon")) {
-				c.onEC2 = true
-				return true
-			}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
 		}
-	}
-
-	// Check system vendor for "amazon"
-	sysVendorPath := "/sys/class/dmi/id/sys_vendor"
-	if fileExists(sysVendorPath) {
-		if data, err := os.ReadFile(sysVendorPath); err == nil {
-			if bytes.Contains(bytes.ToLower(data), []byte("amazon")) {
-				c.onEC2 = true
-				return true
-			}
+		if check(data) {
+			c.onEC2 = true
+			return true
 		}
 	}
 
 	// As a last resort, try to access the EC2 metadata service
 	cfg, err := config.LoadDefaultConfig(ctx, config.WithHTTPClient(&http.Client{Timeout: 500 * time.Millisecond}))
-	if err == nil {
-		imdsClient := imds.NewFromConfig(cfg)
-		iid, err := imdsClient.GetInstanceIdentityDocument(ctx, &imds.GetInstanceIdentityDocumentInput{})
-		if err == nil && iid != nil && iid.InstanceID != "" {
-			c.onEC2 = true
-			return true
-		}
+	if err != nil {
+		return false
+	}
+
+	imdsClient := imds.NewFromConfig(cfg)
+	iid, err := imdsClient.GetInstanceIdentityDocument(ctx, &imds.GetInstanceIdentityDocumentInput{})
+	if err == nil && iid != nil && iid.InstanceID != "" {
+		c.onEC2 = true
+		return true
 	}
 
 	return false
