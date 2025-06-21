@@ -4,7 +4,7 @@ go 1.21.4
 
 require (
 	emperror.dev/errors v0.8.1
-	github.com/gezacorp/metadatax v0.0.0-20231202140208-0d515eb1ad2c
+	github.com/gezacorp/metadatax v0.0.0-20250619152456-c2ae8300820c
 	github.com/gohobby/assert v0.1.0
 )
 

@@ -3,7 +3,7 @@ module github.com/gezacorp/metadatax/collectors/linuxos
 go 1.21.4
 
 require (
-	github.com/gezacorp/metadatax v0.0.0-20231120211548-710d22f641af
+	github.com/gezacorp/metadatax v0.0.0-20250619152456-c2ae8300820c
 	github.com/signalfx/golib v2.5.1+incompatible
 	github.com/stretchr/testify v1.8.4
 )

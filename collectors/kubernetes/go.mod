@@ -4,7 +4,7 @@ go 1.21.4
 
 require (
 	emperror.dev/errors v0.8.1
-	github.com/gezacorp/metadatax v0.0.0-00010101000000-000000000000
+	github.com/gezacorp/metadatax v0.0.0-20250619152456-c2ae8300820c
 	github.com/prometheus/procfs v0.12.0
 	github.com/stretchr/testify v1.8.4
 	k8s.io/api v0.28.4

@@ -6,7 +6,7 @@ require (
 	emperror.dev/errors v0.8.1
 	github.com/aws/aws-sdk-go-v2/config v1.25.5
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.31
-	github.com/gezacorp/metadatax v0.0.0-00010101000000-000000000000
+	github.com/gezacorp/metadatax v0.0.0-20250619152456-c2ae8300820c
 	github.com/stretchr/testify v1.8.4
 )
 

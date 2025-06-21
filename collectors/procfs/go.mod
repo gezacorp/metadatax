@@ -4,7 +4,7 @@ go 1.21.4
 
 require (
 	emperror.dev/errors v0.8.1
-	github.com/gezacorp/metadatax v0.0.0-20231120211548-710d22f641af
+	github.com/gezacorp/metadatax v0.0.0-20250619152456-c2ae8300820c
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/shirou/gopsutil/v3 v3.23.10
 	github.com/stretchr/testify v1.8.4

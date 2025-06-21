@@ -3,7 +3,7 @@ module github.com/gezacorp/metadatax/collectors/sysfsdmi
 go 1.21.4
 
 require (
-	github.com/gezacorp/metadatax v0.0.0-20231126124537-3cb1a7ec5645
+	github.com/gezacorp/metadatax v0.0.0-20250619152456-c2ae8300820c
 	github.com/gohobby/assert v0.1.0
 )
 
