@@ -1,13 +1,15 @@
-go 1.22.0
+go 1.23
+
+toolchain go1.24.3
 
 use (
 	.
+	./collectors/azure
+	./collectors/docker
+	./collectors/ec2
+	./collectors/gcp
+	./collectors/kubernetes
 	./collectors/linuxos
 	./collectors/procfs
-	./collectors/docker
-	./collectors/kubernetes
-	./collectors/ec2
-	./collectors/azure
-	./collectors/gcp
 	./collectors/sysfsdmi
 )

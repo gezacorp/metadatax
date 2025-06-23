@@ -10,7 +10,8 @@ import (
 
 	"emperror.dev/errors"
 	"github.com/opencontainers/go-digest"
-	"github.com/shirou/gopsutil/v3/process"
+	"github.com/shirou/gopsutil/v4/net"
+	"github.com/shirou/gopsutil/v4/process"
 
 	"github.com/gezacorp/metadatax"
 )
@@ -31,11 +32,12 @@ type ProcessInfoFunc func(ctx context.Context, pid int32) (ProcessInfo, error)
 type ProcessInfo interface {
 	NameWithContext(ctx context.Context) (string, error)
 	CmdlineWithContext(ctx context.Context) (string, error)
-	UidsWithContext(ctx context.Context) ([]int32, error)
-	GidsWithContext(ctx context.Context) ([]int32, error)
-	GroupsWithContext(ctx context.Context) ([]int32, error)
+	UidsWithContext(ctx context.Context) ([]uint32, error)
+	GidsWithContext(ctx context.Context) ([]uint32, error)
+	GroupsWithContext(ctx context.Context) ([]uint32, error)
 	EnvironWithContext(ctx context.Context) ([]string, error)
 	ExeWithContext(ctx context.Context) (string, error)
+	ConnectionsWithContext(ctx context.Context) ([]net.ConnectionStat, error)
 }
 
 type CollectorOption func(*collector)
@@ -100,6 +102,7 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 		c.uids,
 		c.gids,
 		c.binary,
+		c.network,
 	}
 
 	if c.extractEnvs {
@@ -187,6 +190,21 @@ func (c *collector) binary(ctx context.Context, processInfo ProcessInfo, md meta
 		}
 
 		bmd.AddLabel("hash", hash.String())
+	}
+}
+
+func (c *collector) network(ctx context.Context, processInfo ProcessInfo, md metadatax.MetadataContainer) {
+	netmd := md.Segment("net")
+	if conns, err := processInfo.ConnectionsWithContext(ctx); err == nil {
+		var bindings []string
+		for _, conn := range conns {
+			if conn.Status == "LISTEN" {
+				bindings = append(bindings, conn.Laddr.IP+":"+strconv.Itoa(int(conn.Laddr.Port)))
+			}
+		}
+		if len(bindings) > 0 {
+			netmd.AddLabel("bindings", bindings...)
+		}
 	}
 }
 
