@@ -100,7 +100,7 @@ func TestGetMetadata(t *testing.T) {
 		"process:uid":            {strconv.Itoa(int(processInfo.uid))},
 		"process:uid:effective":  {strconv.Itoa(int(processInfo.uid))},
 		"process:uid:real":       {strconv.Itoa(int(processInfo.uid))},
-		"process:net:bindings":   {"127.0.0.1:8080"},
+		"process:network:bindings":   {"127.0.0.1:8080"},
 	}
 
 	ctx := metadatax.ContextWithPID(context.Background(), int32(processInfo.pid))

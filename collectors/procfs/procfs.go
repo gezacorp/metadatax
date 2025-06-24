@@ -194,7 +194,7 @@ func (c *collector) binary(ctx context.Context, processInfo ProcessInfo, md meta
 }
 
 func (c *collector) network(ctx context.Context, processInfo ProcessInfo, md metadatax.MetadataContainer) {
-	netmd := md.Segment("net")
+	netmd := md.Segment("network")
 	if conns, err := processInfo.ConnectionsWithContext(ctx); err == nil {
 		var bindings []string
 		for _, conn := range conns {
