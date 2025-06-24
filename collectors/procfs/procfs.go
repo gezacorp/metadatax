@@ -203,7 +203,7 @@ func (c *collector) network(ctx context.Context, processInfo ProcessInfo, md met
 			}
 		}
 		if len(bindings) > 0 {
-			netmd.AddLabel("bindings", bindings...)
+			netmd.AddLabel("binding", bindings...)
 		}
 	}
 }

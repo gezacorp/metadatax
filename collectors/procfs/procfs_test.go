@@ -88,19 +88,19 @@ func TestGetMetadata(t *testing.T) {
 	}
 
 	expected := map[string][]string{
-		"process:binary:path":    {processInfo.exe},
-		"process:binary:hash":    {processInfo.hash},
-		"process:cmdline":        {processInfo.cmdLine},
-		"process:gid":            {strconv.Itoa(int(processInfo.gid))},
-		"process:gid:additional": {strconv.Itoa(int(processInfo.agids[0])), strconv.Itoa(int(processInfo.agids[1])), strconv.Itoa(int(processInfo.agids[2])), strconv.Itoa(int(processInfo.agids[3]))},
-		"process:gid:effective":  {strconv.Itoa(int(processInfo.gid))},
-		"process:gid:real":       {strconv.Itoa(int(processInfo.gid))},
-		"process:name":           {processInfo.name},
-		"process:pid":            {strconv.Itoa(int(processInfo.pid))},
-		"process:uid":            {strconv.Itoa(int(processInfo.uid))},
-		"process:uid:effective":  {strconv.Itoa(int(processInfo.uid))},
-		"process:uid:real":       {strconv.Itoa(int(processInfo.uid))},
-		"process:network:bindings":   {"127.0.0.1:8080"},
+		"process:binary:path":     {processInfo.exe},
+		"process:binary:hash":     {processInfo.hash},
+		"process:cmdline":         {processInfo.cmdLine},
+		"process:gid":             {strconv.Itoa(int(processInfo.gid))},
+		"process:gid:additional":  {strconv.Itoa(int(processInfo.agids[0])), strconv.Itoa(int(processInfo.agids[1])), strconv.Itoa(int(processInfo.agids[2])), strconv.Itoa(int(processInfo.agids[3]))},
+		"process:gid:effective":   {strconv.Itoa(int(processInfo.gid))},
+		"process:gid:real":        {strconv.Itoa(int(processInfo.gid))},
+		"process:name":            {processInfo.name},
+		"process:pid":             {strconv.Itoa(int(processInfo.pid))},
+		"process:uid":             {strconv.Itoa(int(processInfo.uid))},
+		"process:uid:effective":   {strconv.Itoa(int(processInfo.uid))},
+		"process:uid:real":        {strconv.Itoa(int(processInfo.uid))},
+		"process:network:binding": {"127.0.0.1:8080"},
 	}
 
 	ctx := metadatax.ContextWithPID(context.Background(), int32(processInfo.pid))
