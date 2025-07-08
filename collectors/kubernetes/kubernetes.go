@@ -10,7 +10,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/gezacorp/metadatax"
-	"github.com/gezacorp/metadatax/collectors/kubernetes/kubelet"
 )
 
 const (
@@ -23,6 +22,10 @@ type PodResolver interface {
 	GetPodAndContainerID(pid int32) (string, string, error)
 }
 
+type PodsGetter interface {
+	GetPods(ctx context.Context) ([]corev1.Pod, error)
+}
+
 type podContext struct {
 	pod             corev1.Pod
 	container       corev1.Container
@@ -30,8 +33,8 @@ type podContext struct {
 }
 
 type collector struct {
-	kubeletClient kubelet.Client
-	podResolver   PodResolver
+	podsGetter  PodsGetter
+	podResolver PodResolver
 
 	mdContainerInitFunc func() metadatax.MetadataContainer
 	skipOnSoftError     bool
@@ -39,9 +42,9 @@ type collector struct {
 
 type CollectorOption func(*collector)
 
-func WithKubeletClient(client kubelet.Client) CollectorOption {
+func WithPodsGetter(getter PodsGetter) CollectorOption {
 	return func(c *collector) {
-		c.kubeletClient = client
+		c.podsGetter = getter
 	}
 }
 
@@ -74,6 +77,10 @@ func New(opts ...CollectorOption) metadatax.Collector {
 		c.podResolver = c
 	}
 
+	if c.podsGetter == nil {
+		c.podsGetter = c
+	}
+
 	if c.mdContainerInitFunc == nil {
 		c.mdContainerInitFunc = func() metadatax.MetadataContainer {
 			return metadatax.New(metadatax.WithPrefix(name))
@@ -81,6 +88,10 @@ func New(opts ...CollectorOption) metadatax.Collector {
 	}
 
 	return c
+}
+
+func (c *collector) GetPods(ctx context.Context) ([]corev1.Pod, error) {
+	return nil, errors.NewPlain("pods getter not specified")
 }
 
 func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContainer, error) {
@@ -100,9 +111,9 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 		return md, nil
 	}
 
-	pods, err := c.kubeletClient.GetPods(ctx)
+	pods, err := c.podsGetter.GetPods(ctx)
 	if err != nil {
-		return nil, errors.WrapIf(err, "could not get pods from kubelet")
+		return nil, errors.WrapIf(err, "could not get pods")
 	}
 
 	podctx, found := c.getPodContext(podID, containerID, pods)
@@ -136,7 +147,8 @@ func (c *collector) pod(podctx podContext, md metadatax.MetadataContainer) {
 	omd := pmd.Segment("owner")
 	for _, owner := range pod.GetOwnerReferences() {
 		omd.AddLabel("kind", strings.ToLower(owner.Kind)).
-			AddLabel("kind-with-version", strings.ToLower(owner.APIVersion)+"/"+strings.ToLower(owner.Kind))
+			AddLabel("kind-with-version", strings.ToLower(owner.APIVersion)+"/"+strings.ToLower(owner.Kind)).
+			AddLabel("name", owner.Name)
 	}
 
 	md.Segment("node").AddLabel("name", pod.Spec.NodeName)
