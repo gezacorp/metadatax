@@ -1,6 +1,6 @@
 module github.com/gezacorp/metadatax/collectors/ec2
 
-go 1.22.0
+go 1.24.4
 
 require (
 	emperror.dev/errors v0.8.1
