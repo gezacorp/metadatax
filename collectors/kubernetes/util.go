@@ -1,6 +1,7 @@
 package kubernetes
 
 import (
+	"os"
 	"regexp"
 
 	"emperror.dev/errors"
@@ -33,4 +34,8 @@ func GetContainerIDFromCgroups(cgroups []Cgroup) string {
 	}
 
 	return ""
+}
+
+func NodeName() (string, error) {
+	return os.Hostname()
 }
