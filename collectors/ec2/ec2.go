@@ -153,6 +153,15 @@ func (c *collector) isOnEC2(ctx context.Context) bool {
 		return true
 	}
 
+	v := IsOnEC2(ctx)
+	if v {
+		c.onEC2 = true
+	}
+
+	return v
+}
+
+func IsOnEC2(ctx context.Context) bool {
 	checks := map[string]func(data []byte) bool{
 		"/sys/hypervisor/uuid": func(data []byte) bool {
 			return bytes.HasPrefix(bytes.ToLower(data), []byte("ec2"))
@@ -177,7 +186,6 @@ func (c *collector) isOnEC2(ctx context.Context) bool {
 			continue
 		}
 		if check(data) {
-			c.onEC2 = true
 			return true
 		}
 	}
@@ -191,7 +199,6 @@ func (c *collector) isOnEC2(ctx context.Context) bool {
 	imdsClient := imds.NewFromConfig(cfg)
 	iid, err := imdsClient.GetInstanceIdentityDocument(ctx, &imds.GetInstanceIdentityDocumentInput{})
 	if err == nil && iid != nil && iid.InstanceID != "" {
-		c.onEC2 = true
 		return true
 	}
 

@@ -18,9 +18,12 @@ import (
 
 const (
 	name = "process"
+
+	basePath = "/proc/cmdline"
 )
 
 type collector struct {
+	hasProcfs       bool
 	extractEnvs     bool
 	processInfoFunc ProcessInfoFunc
 
@@ -84,6 +87,10 @@ func New(opts ...CollectorOption) metadatax.Collector {
 
 func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContainer, error) {
 	md := c.mdContainerInitFunc()
+
+	if !c.hasProcFS() {
+		return md, nil
+	}
 
 	pid, found := metadatax.PIDFromContext(ctx)
 	if !found {
@@ -215,4 +222,25 @@ func procPath() string {
 	}
 
 	return "/proc"
+}
+
+func (c *collector) hasProcFS() bool {
+	if c.hasProcfs {
+		return true
+	}
+
+	v := HasProcFS()
+	if v {
+		c.hasProcfs = true
+	}
+
+	return v
+}
+
+func HasProcFS() bool {
+	if _, err := os.Stat(basePath); err != nil {
+		return false
+	}
+
+	return true
 }

@@ -163,6 +163,15 @@ func (c *collector) isOnAzure() bool {
 		return true
 	}
 
+	v := IsOnAzure()
+	if v {
+		c.onAzure = true
+	}
+
+	return v
+}
+
+func IsOnAzure() bool {
 	data, err := os.ReadFile("/sys/class/dmi/id/sys_vendor")
 	if err != nil {
 		return false

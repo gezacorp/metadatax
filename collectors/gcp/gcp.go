@@ -194,6 +194,15 @@ func (c *collector) isOnGoogle() bool {
 		return true
 	}
 
+	v := IsOnGoogle()
+	if v {
+		c.onGoogle = true
+	}
+
+	return v
+}
+
+func IsOnGoogle() bool {
 	data, err := os.ReadFile("/sys/class/dmi/id/product_name")
 	if err != nil {
 		return false

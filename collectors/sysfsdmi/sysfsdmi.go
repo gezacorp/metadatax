@@ -125,6 +125,15 @@ func (c *collector) hasSysFS() bool {
 		return true
 	}
 
+	v := HasSysFS()
+	if v {
+		c.hasSysfs = true
+	}
+
+	return v
+}
+
+func HasSysFS() bool {
 	if _, err := os.Stat(basePath); err != nil {
 		return false
 	}
