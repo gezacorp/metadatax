@@ -48,19 +48,11 @@ func CollectorWithMetadataContainerInitFunc(fn func() metadatax.MetadataContaine
 	}
 }
 
-func New(opts ...CollectorOption) (metadatax.Collector, error) {
+func New(opts ...CollectorOption) metadatax.Collector {
 	c := &collector{}
 
 	for _, f := range opts {
 		f(c)
-	}
-
-	if c.imdsClient == nil {
-		if ic, err := NewIMDSDefaultConfig(context.Background()); err != nil {
-			return nil, err
-		} else {
-			c.imdsClient = ic
-		}
 	}
 
 	if c.mdContainerInitFunc == nil {
@@ -69,7 +61,7 @@ func New(opts ...CollectorOption) (metadatax.Collector, error) {
 		}
 	}
 
-	return c, nil
+	return c
 }
 
 func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContainer, error) {
@@ -77,6 +69,14 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 
 	if !c.isOnEC2(ctx) {
 		return md, nil
+	}
+
+	if c.imdsClient == nil {
+		if ic, err := NewIMDSDefaultConfig(ctx); err != nil {
+			return nil, err
+		} else {
+			c.imdsClient = ic
+		}
 	}
 
 	getters := []func(context.Context, metadatax.MetadataContainer){
