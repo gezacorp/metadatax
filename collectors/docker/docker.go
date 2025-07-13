@@ -158,6 +158,10 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 
 	containerID, err := c.containerIDGetter.GetContainerIDFromPID(int(pid))
 	if err != nil {
+		if c.skipOnSoftError {
+			return md, nil
+		}
+
 		return nil, errors.WrapIfWithDetails(err, "could not get cgroups from pid", "pid", pid)
 	}
 
