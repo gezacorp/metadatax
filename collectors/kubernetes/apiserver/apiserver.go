@@ -28,7 +28,7 @@ func WithKubeconfig(path string) ClientOption {
 	}
 }
 
-func NewClient(opts ...ClientOption) (kubernetes.PodsGetter, error) {
+func NewClient(opts ...ClientOption) (kubernetes.PodLister, error) {
 	var err error
 
 	c := &apiServerClient{}

@@ -99,7 +99,7 @@ func (c Config) Available() bool {
 	}
 }
 
-func PodsGetter() (kubernetes.PodsGetter, error) {
+func PodsGetter() (kubernetes.PodLister, error) {
 	var cfg Config
 	for _, config := range configs {
 		if config.Available() {

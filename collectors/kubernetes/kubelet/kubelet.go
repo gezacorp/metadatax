@@ -70,7 +70,7 @@ type kubeletClient struct {
 	skipCertVerify bool
 }
 
-func NewClient(opts ...ClientOption) (kubernetes.PodsGetter, error) {
+func NewClient(opts ...ClientOption) (kubernetes.PodLister, error) {
 	c := &kubeletClient{}
 
 	for _, f := range opts {

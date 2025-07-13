@@ -66,7 +66,7 @@ func TestGetMetadata(t *testing.T) {
 	}
 
 	collector := kubernetes.New(
-		kubernetes.WithPodsGetter(&kubeletClient{}),
+		kubernetes.WithPodLister(&kubeletClient{}),
 		kubernetes.WithPodResolver(&podResolver{}),
 	)
 

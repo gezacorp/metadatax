@@ -22,7 +22,7 @@ type PodResolver interface {
 	GetPodAndContainerID(pid int32) (string, string, error)
 }
 
-type PodsGetter interface {
+type PodLister interface {
 	GetPods(ctx context.Context) ([]corev1.Pod, error)
 }
 
@@ -33,7 +33,7 @@ type podContext struct {
 }
 
 type collector struct {
-	podsGetter  PodsGetter
+	podLister   PodLister
 	podResolver PodResolver
 
 	mdContainerInitFunc func() metadatax.MetadataContainer
@@ -42,9 +42,9 @@ type collector struct {
 
 type CollectorOption func(*collector)
 
-func WithPodsGetter(getter PodsGetter) CollectorOption {
+func WithPodLister(getter PodLister) CollectorOption {
 	return func(c *collector) {
-		c.podsGetter = getter
+		c.podLister = getter
 	}
 }
 
@@ -77,8 +77,8 @@ func New(opts ...CollectorOption) metadatax.Collector {
 		c.podResolver = c
 	}
 
-	if c.podsGetter == nil {
-		c.podsGetter = c
+	if c.podLister == nil {
+		c.podLister = c
 	}
 
 	if c.mdContainerInitFunc == nil {
@@ -111,7 +111,7 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 		return md, nil
 	}
 
-	pods, err := c.podsGetter.GetPods(ctx)
+	pods, err := c.podLister.GetPods(ctx)
 	if err != nil {
 		return nil, errors.WrapIf(err, "could not get pods")
 	}
