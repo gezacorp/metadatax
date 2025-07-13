@@ -11,4 +11,5 @@ use (
 	./collectors/linuxos
 	./collectors/procfs
 	./collectors/sysfsdmi
+	./collectors/node
 )
