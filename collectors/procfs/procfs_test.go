@@ -115,6 +115,7 @@ func TestGetMetadata(t *testing.T) {
 				metadatax.WithPrefix("process"),
 			)
 		}),
+		procfs.WithForceHasProcFS(),
 	).GetMetadata(ctx)
 	assert.Nil(t, err)
 	assert.Equal(t, expected, map[string][]string(md.GetLabels()))

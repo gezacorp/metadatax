@@ -63,6 +63,12 @@ func CollectorWithMetadataContainerInitFunc(fn func() metadatax.MetadataContaine
 	}
 }
 
+func WithForceHasProcFS() CollectorOption {
+	return func(c *collector) {
+		c.hasProcfs = true
+	}
+}
+
 func New(opts ...CollectorOption) metadatax.Collector {
 	c := &collector{}
 
