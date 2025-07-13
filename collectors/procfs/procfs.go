@@ -28,6 +28,7 @@ type collector struct {
 	processInfoFunc ProcessInfoFunc
 
 	mdContainerInitFunc func() metadatax.MetadataContainer
+	skipOnSoftError     bool
 }
 
 type ProcessInfoFunc func(ctx context.Context, pid int32) (ProcessInfo, error)
@@ -69,6 +70,12 @@ func WithForceHasProcFS() CollectorOption {
 	}
 }
 
+func WithSkipOnSoftError() CollectorOption {
+	return func(c *collector) {
+		c.skipOnSoftError = true
+	}
+}
+
 func New(opts ...CollectorOption) metadatax.Collector {
 	c := &collector{}
 
@@ -105,6 +112,10 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 
 	processInfo, err := c.processInfoFunc(ctx, pid)
 	if err != nil {
+		if c.skipOnSoftError {
+			return md, nil
+		}
+
 		return nil, errors.WrapIf(err, "could not create new process instance")
 	}
 
