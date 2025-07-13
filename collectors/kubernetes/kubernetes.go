@@ -77,10 +77,6 @@ func New(opts ...CollectorOption) metadatax.Collector {
 		c.podResolver = c
 	}
 
-	if c.podLister == nil {
-		c.podLister = c
-	}
-
 	if c.mdContainerInitFunc == nil {
 		c.mdContainerInitFunc = func() metadatax.MetadataContainer {
 			return metadatax.New(metadatax.WithPrefix(name))
@@ -90,12 +86,16 @@ func New(opts ...CollectorOption) metadatax.Collector {
 	return c
 }
 
-func (c *collector) GetPods(ctx context.Context) ([]corev1.Pod, error) {
-	return nil, errors.NewPlain("pods getter not specified")
-}
-
 func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContainer, error) {
 	md := c.mdContainerInitFunc()
+
+	if c.podLister == nil {
+		if c.skipOnSoftError {
+			return md, nil
+		}
+
+		return md, errors.NewPlain("pod lister is not specified")
+	}
 
 	pid, found := metadatax.PIDFromContext(ctx)
 	if !found {
