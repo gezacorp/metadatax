@@ -2,10 +2,18 @@ package docker
 
 import (
 	"context"
+	"io"
+	"os"
 	"strings"
 
 	"emperror.dev/errors"
-	"github.com/docker/docker/api/types"
+	cerrdefs "github.com/containerd/errdefs"
+	"github.com/docker/cli/cli/command"
+	"github.com/docker/cli/cli/config"
+	docker_ctx "github.com/docker/cli/cli/context/docker"
+	"github.com/docker/cli/cli/context/store"
+	"github.com/docker/cli/cli/flags"
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 
 	"github.com/gezacorp/metadatax"
@@ -13,6 +21,8 @@ import (
 
 const (
 	name = "docker"
+
+	defaultSocketPath = "unix:///var/run/docker.sock"
 )
 
 var ContainerIDNotFoundError = errors.Sentinel("could not find container id for pid")
@@ -25,10 +35,11 @@ type collector struct {
 
 	mdContainerInitFunc func() metadatax.MetadataContainer
 	skipOnSoftError     bool
+	hasDocker           *bool
 }
 
 type ContainerInspector interface {
-	ContainerInspect(ctx context.Context, containerID string) (types.ContainerJSON, error)
+	ContainerInspect(ctx context.Context, containerID string) (container.InspectResponse, error)
 }
 
 type ContainerIDGetter interface {
@@ -73,19 +84,21 @@ func WithSkipOnSoftError() CollectorOption {
 	}
 }
 
-func New(opts ...CollectorOption) (metadatax.Collector, error) {
+func New(opts ...CollectorOption) metadatax.Collector {
 	c := &collector{}
 
 	for _, f := range opts {
 		f(c)
 	}
 
-	if c.containerInspector == nil {
-		if dc, err := c.getDockerClient(); err != nil {
-			return nil, errors.WrapIf(err, "could not get docker client")
-		} else {
-			c.containerInspector = dc
+	if c.socketPath == "" {
+		if host, err := GetCurrentContextHost(); err == nil {
+			c.socketPath = host
 		}
+	}
+
+	if c.socketPath == "" {
+		c.socketPath = defaultSocketPath
 	}
 
 	if c.containerIDGetter == nil {
@@ -98,11 +111,45 @@ func New(opts ...CollectorOption) (metadatax.Collector, error) {
 		}
 	}
 
-	return c, nil
+	return c
+}
+
+func (c *collector) HasDocker() bool {
+	if c.hasDocker != nil {
+		return *c.hasDocker
+	}
+
+	ret := c.isSocketPathExists(c.socketPath)
+	c.hasDocker = &ret
+
+	return ret
+}
+
+func (c *collector) isSocketPathExists(path string) bool {
+	path = strings.TrimPrefix(path, "unix://")
+
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+
+	return (info.Mode() & os.ModeSocket) != 0
 }
 
 func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContainer, error) {
 	md := c.mdContainerInitFunc()
+
+	if !c.HasDocker() {
+		return md, nil
+	}
+
+	if c.containerInspector == nil {
+		var err error
+
+		if c.containerInspector, err = c.getDockerClient(); err != nil {
+			return nil, errors.WrapIf(err, "could not get docker client")
+		}
+	}
 
 	pid, found := metadatax.PIDFromContext(ctx)
 	if !found {
@@ -123,7 +170,7 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 	}
 
 	containerJSON, err := c.containerInspector.ContainerInspect(ctx, containerID)
-	if c.skipOnSoftError && client.IsErrNotFound(err) {
+	if c.skipOnSoftError && cerrdefs.IsNotFound(err) {
 		return md, nil
 	}
 
@@ -131,7 +178,7 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 		return nil, err
 	}
 
-	getters := []func(types.ContainerJSON, metadatax.MetadataContainer){
+	getters := []func(container.InspectResponse, metadatax.MetadataContainer){
 		c.base,
 		c.labels,
 		c.envs,
@@ -155,13 +202,13 @@ func (c *collector) GetContainerIDFromPID(pid int) (string, error) {
 	return GetContainerIDFromCgroups(cgroups), nil
 }
 
-func (c *collector) base(containerJSON types.ContainerJSON, md metadatax.MetadataContainer) {
+func (c *collector) base(containerJSON container.InspectResponse, md metadatax.MetadataContainer) {
 	md.AddLabel("id", containerJSON.ID)
 	md.AddLabel("name", strings.TrimLeft(containerJSON.Name, "/"))
 	md.AddLabel("cmdline", containerJSON.Path+" "+strings.Join(containerJSON.Args, " "))
 }
 
-func (c *collector) envs(containerJSON types.ContainerJSON, md metadatax.MetadataContainer) {
+func (c *collector) envs(containerJSON container.InspectResponse, md metadatax.MetadataContainer) {
 	emd := md.Segment("env")
 	for _, env := range containerJSON.Config.Env {
 		if !strings.Contains(env, "=") {
@@ -172,20 +219,20 @@ func (c *collector) envs(containerJSON types.ContainerJSON, md metadatax.Metadat
 	}
 }
 
-func (c *collector) labels(containerJSON types.ContainerJSON, md metadatax.MetadataContainer) {
+func (c *collector) labels(containerJSON container.InspectResponse, md metadatax.MetadataContainer) {
 	lmd := md.Segment("label")
 	for k, v := range containerJSON.Config.Labels {
 		lmd.AddLabel(k, v)
 	}
 }
 
-func (c *collector) image(containerJSON types.ContainerJSON, md metadatax.MetadataContainer) {
+func (c *collector) image(containerJSON container.InspectResponse, md metadatax.MetadataContainer) {
 	md.Segment("image").
 		AddLabel("name", containerJSON.Config.Image).
 		AddLabel("hash", containerJSON.Image)
 }
 
-func (c *collector) network(containerJSON types.ContainerJSON, md metadatax.MetadataContainer) {
+func (c *collector) network(containerJSON container.InspectResponse, md metadatax.MetadataContainer) {
 	nmd := md.Segment("network")
 	nmd.AddLabel("mode", string(containerJSON.HostConfig.NetworkMode))
 	nmd.AddLabel("hostname", containerJSON.Config.Hostname)
@@ -206,4 +253,46 @@ func (c *collector) getDockerClient() (*client.Client, error) {
 	}
 
 	return client.NewClientWithOpts(opts...)
+}
+
+func GetCurrentContextHost() (string, error) {
+	storeCfg := command.DefaultContextStoreConfig()
+	contextStore := &command.ContextStoreWithDefault{
+		Store: store.New(config.ContextStoreDir(), storeCfg),
+		Resolver: func() (*command.DefaultContext, error) {
+			return command.ResolveDefaultContext(&flags.ClientOptions{}, storeCfg)
+		},
+	}
+
+	getContextName := func() string {
+		cfg := config.LoadDefaultConfigFile(io.Discard)
+
+		if ctxName := os.Getenv(command.EnvOverrideContext); ctxName != "" {
+			return ctxName
+		}
+
+		if cfg != nil && cfg.CurrentContext != "" {
+			return cfg.CurrentContext
+		}
+
+		return command.DefaultContextName
+	}
+
+	contexts, err := contextStore.List()
+	if err != nil {
+		return "", err
+	}
+
+	currentContextName := getContextName()
+	for _, ctx := range contexts {
+		if ctx.Name != currentContextName {
+			continue
+		}
+
+		if me, err := docker_ctx.EndpointFromContext(ctx); err == nil {
+			return me.Host, nil
+		}
+	}
+
+	return "", nil
 }
