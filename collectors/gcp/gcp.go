@@ -102,9 +102,24 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 	if project.NumericID > 0 {
 		ps.AddLabel("id:numeric", strconv.FormatInt(project.NumericID, 10))
 	}
-	ps.Segment("attribute").AddLabels(metadatax.ConvertMapStringToLabels(project.Attributes))
+
+	ps.Segment("attribute").AddLabels(metadatax.ConvertMapStringToLabels(c.removeAttributesWithNewlines(project.Attributes)))
 
 	return md, nil
+}
+
+func (c *collector) removeAttributesWithNewlines(attrs map[string]string) map[string]string {
+	attributes := map[string]string{}
+
+	for k, v := range attrs {
+		if strings.Count(v, "\n") > 1 {
+			continue
+		}
+
+		attributes[k] = v
+	}
+
+	return attributes
 }
 
 func (c *collector) base(md metadatax.MetadataContainer, instance *GCPMetadataInstance) {
@@ -112,7 +127,8 @@ func (c *collector) base(md metadatax.MetadataContainer, instance *GCPMetadataIn
 	md.AddLabel("name", instance.Name)
 	md.AddLabel("cpu-platform", instance.CPUPlatform)
 
-	attributes := metadatax.ConvertMapStringToLabels(instance.Attributes)
+	attributes := metadatax.ConvertMapStringToLabels(c.removeAttributesWithNewlines(instance.Attributes))
+
 	// filter out ssh public keys
 	delete(attributes, "ssh-keys")
 	md.Segment("attribute").AddLabels(attributes)
