@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
 	"github.com/gezacorp/metadatax"
@@ -196,7 +197,9 @@ func IsOnEC2(ctx context.Context) bool {
 		return false
 	}
 
-	imdsClient := imds.NewFromConfig(cfg)
+	imdsClient := imds.NewFromConfig(cfg, func(opts *imds.Options) {
+		opts.EnableFallback = aws.FalseTernary
+	})
 	iid, err := imdsClient.GetInstanceIdentityDocument(ctx, &imds.GetInstanceIdentityDocumentInput{})
 	if err == nil && iid != nil && iid.InstanceID != "" {
 		return true
