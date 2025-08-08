@@ -16,7 +16,7 @@ const (
 
 type collector struct {
 	gcpMetadataClient GCPMetadataClient
-	onGoogle          bool
+	onGoogle          *bool
 
 	mdContainerInitFunc func() metadatax.MetadataContainer
 }
@@ -31,7 +31,8 @@ type GCPMetadataClient interface {
 
 func CollectorWithForceOnGoogle() CollectorOption {
 	return func(c *collector) {
-		c.onGoogle = true
+		f := true
+		c.onGoogle = &f
 	}
 }
 
@@ -206,16 +207,14 @@ func (c *collector) serviceaccount(md metadatax.MetadataContainer, instance *GCP
 }
 
 func (c *collector) isOnGoogle() bool {
-	if c.onGoogle {
-		return true
+	if c.onGoogle != nil {
+		return *c.onGoogle
 	}
 
-	v := IsOnGoogle()
-	if v {
-		c.onGoogle = true
-	}
+	isOnGoogle := IsOnGoogle()
+	c.onGoogle = &isOnGoogle
 
-	return v
+	return isOnGoogle
 }
 
 func IsOnGoogle() bool {

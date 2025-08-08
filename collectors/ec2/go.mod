@@ -4,6 +4,7 @@ go 1.24.4
 
 require (
 	emperror.dev/errors v0.8.1
+	github.com/aws/aws-sdk-go-v2 v1.36.4
 	github.com/aws/aws-sdk-go-v2/config v1.25.5
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.31
 	github.com/gezacorp/metadatax v0.0.0-20250619152456-c2ae8300820c
@@ -11,7 +12,6 @@ require (
 )
 
 require (
-	github.com/aws/aws-sdk-go-v2 v1.36.4 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.16.4 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.2.4 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.5.4 // indirect

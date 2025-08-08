@@ -24,7 +24,7 @@ type IMDSClient interface {
 
 type collector struct {
 	imdsClient IMDSClient
-	onEC2      bool
+	onEC2      *bool
 
 	mdContainerInitFunc func() metadatax.MetadataContainer
 }
@@ -39,7 +39,8 @@ func WithIMDSClient(client IMDSClient) CollectorOption {
 
 func WithForceOnEC2() CollectorOption {
 	return func(c *collector) {
-		c.onEC2 = true
+		f := true
+		c.onEC2 = &f
 	}
 }
 
@@ -150,16 +151,14 @@ func (c *collector) services(ctx context.Context, md metadatax.MetadataContainer
 }
 
 func (c *collector) isOnEC2(ctx context.Context) bool {
-	if c.onEC2 {
-		return true
+	if c.onEC2 != nil {
+		return *c.onEC2
 	}
 
-	v := IsOnEC2(ctx)
-	if v {
-		c.onEC2 = true
-	}
+	isOnEC2 := IsOnEC2(ctx)
+	c.onEC2 = &isOnEC2
 
-	return v
+	return isOnEC2
 }
 
 func IsOnEC2(ctx context.Context) bool {
