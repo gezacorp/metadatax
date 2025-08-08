@@ -128,6 +128,10 @@ func (c *collector) HasDocker() bool {
 func (c *collector) isSocketPathExists(path string) bool {
 	path = strings.TrimPrefix(path, "unix://")
 
+	if _, err := os.Open(path); errors.Is(err, os.ErrPermission) {
+		return false
+	}
+
 	info, err := os.Stat(path)
 	if err != nil {
 		return false

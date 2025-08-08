@@ -91,9 +91,9 @@ var configs = []Config{
 func (c Config) Available() bool {
 	switch c.SourceType {
 	case APIServerSourceType:
-		return everyFileExists(c.KubeConfigFile)
+		return everyFileExistsAndReadable(c.KubeConfigFile)
 	case KubeletSourceType:
-		return everyFileExists(c.CACertFile, c.CertFile, c.KeyFile)
+		return everyFileExistsAndReadable(c.CACertFile, c.CertFile, c.KeyFile)
 	default:
 		return false
 	}
@@ -142,9 +142,9 @@ func PodLister() (kubernetes.PodLister, error) {
 	return nil, errors.WithStackIf(AutoConfigurationFailedErr)
 }
 
-func everyFileExists(paths ...string) bool {
+func everyFileExistsAndReadable(paths ...string) bool {
 	for _, path := range paths {
-		if !fileExists(path) {
+		if !fileExistsAndReadable(path) {
 			return false
 		}
 	}
@@ -152,8 +152,15 @@ func everyFileExists(paths ...string) bool {
 	return true
 }
 
-func fileExists(path string) bool {
+func fileExistsAndReadable(path string) bool {
 	_, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
 
-	return err == nil || !os.IsNotExist(err)
+	if _, err := os.Open(path); errors.Is(err, os.ErrPermission) {
+		return false
+	}
+
+	return true
 }
