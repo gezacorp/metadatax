@@ -1,6 +1,4 @@
-go 1.23
-
-toolchain go1.24.3
+go 1.24.4
 
 use (
 	.
@@ -12,4 +10,5 @@ use (
 	./collectors/linuxos
 	./collectors/procfs
 	./collectors/sysfsdmi
+	./collectors/node
 )

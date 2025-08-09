@@ -43,13 +43,12 @@ func TestGetMetadata(t *testing.T) {
 		"services/partition":             "aws",
 	}
 
-	collector, err := ec2.New(
+	collector := ec2.New(
 		ec2.WithIMDSClient(&imdsClient{
 			data: data,
 		}),
 		ec2.WithForceOnEC2(),
 	)
-	assert.Nil(t, err)
 
 	expectedLabels := map[string][]string{
 		"ec2:ami:id":                         {data["ami-id"]},

@@ -16,7 +16,7 @@ const (
 
 type collector struct {
 	gcpMetadataClient GCPMetadataClient
-	onGoogle          bool
+	onGoogle          *bool
 
 	mdContainerInitFunc func() metadatax.MetadataContainer
 }
@@ -31,7 +31,8 @@ type GCPMetadataClient interface {
 
 func CollectorWithForceOnGoogle() CollectorOption {
 	return func(c *collector) {
-		c.onGoogle = true
+		f := true
+		c.onGoogle = &f
 	}
 }
 
@@ -102,9 +103,24 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 	if project.NumericID > 0 {
 		ps.AddLabel("id:numeric", strconv.FormatInt(project.NumericID, 10))
 	}
-	ps.Segment("attribute").AddLabels(metadatax.ConvertMapStringToLabels(project.Attributes))
+
+	ps.Segment("attribute").AddLabels(metadatax.ConvertMapStringToLabels(c.removeAttributesWithNewlines(project.Attributes)))
 
 	return md, nil
+}
+
+func (c *collector) removeAttributesWithNewlines(attrs map[string]string) map[string]string {
+	attributes := map[string]string{}
+
+	for k, v := range attrs {
+		if strings.Count(v, "\n") > 1 {
+			continue
+		}
+
+		attributes[k] = v
+	}
+
+	return attributes
 }
 
 func (c *collector) base(md metadatax.MetadataContainer, instance *GCPMetadataInstance) {
@@ -112,7 +128,8 @@ func (c *collector) base(md metadatax.MetadataContainer, instance *GCPMetadataIn
 	md.AddLabel("name", instance.Name)
 	md.AddLabel("cpu-platform", instance.CPUPlatform)
 
-	attributes := metadatax.ConvertMapStringToLabels(instance.Attributes)
+	attributes := metadatax.ConvertMapStringToLabels(c.removeAttributesWithNewlines(instance.Attributes))
+
 	// filter out ssh public keys
 	delete(attributes, "ssh-keys")
 	md.Segment("attribute").AddLabels(attributes)
@@ -190,10 +207,17 @@ func (c *collector) serviceaccount(md metadatax.MetadataContainer, instance *GCP
 }
 
 func (c *collector) isOnGoogle() bool {
-	if c.onGoogle {
-		return true
+	if c.onGoogle != nil {
+		return *c.onGoogle
 	}
 
+	isOnGoogle := IsOnGoogle()
+	c.onGoogle = &isOnGoogle
+
+	return isOnGoogle
+}
+
+func IsOnGoogle() bool {
 	data, err := os.ReadFile("/sys/class/dmi/id/product_name")
 	if err != nil {
 		return false

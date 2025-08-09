@@ -14,8 +14,7 @@ import (
 	"github.com/gezacorp/metadatax/collectors/kubernetes"
 )
 
-type kubeletClient struct {
-}
+type kubeletClient struct{}
 
 func (c *kubeletClient) GetPods(ctx context.Context) ([]corev1.Pod, error) {
 	file, err := os.Open("testdata/pods.json")
@@ -45,7 +44,8 @@ func (r *podResolver) GetPodAndContainerID(pid int32) (string, string, error) {
 func TestGetMetadata(t *testing.T) {
 	t.Parallel()
 
-	expectedLabels := map[string][]string{"kubernetes:annotation:kubernetes.io/config.seen": {"2023-11-23T16:37:13.953323037Z"},
+	expectedLabels := map[string][]string{
+		"kubernetes:annotation:kubernetes.io/config.seen":   {"2023-11-23T16:37:13.953323037Z"},
 		"kubernetes:annotation:kubernetes.io/config.source": {"api"},
 		"kubernetes:container:image:id":                     {"docker.io/rancher/mirrored-metrics-server@sha256:c2dfd72bafd6406ed306d9fbd07f55c496b004293d13d3de88a4567eacc36558"},
 		"kubernetes:container:name":                         {"metrics-server"},
@@ -59,12 +59,14 @@ func TestGetMetadata(t *testing.T) {
 		"kubernetes:pod:init-image:count":                   {"0"},
 		"kubernetes:pod:name":                               {"metrics-server-648b5df564-drsb2"},
 		"kubernetes:pod:namespace":                          {"kube-system"},
+		"kubernetes:pod:owner:name":                         {"metrics-server-648b5df564"},
 		"kubernetes:pod:owner:kind":                         {"replicaset"},
 		"kubernetes:pod:owner:kind-with-version":            {"apps/v1/replicaset"},
-		"kubernetes:pod:serviceaccount":                     {"metrics-server"}}
+		"kubernetes:pod:serviceaccount":                     {"metrics-server"},
+	}
 
 	collector := kubernetes.New(
-		kubernetes.WithKubeletClient(&kubeletClient{}),
+		kubernetes.WithPodLister(&kubeletClient{}),
 		kubernetes.WithPodResolver(&podResolver{}),
 	)
 

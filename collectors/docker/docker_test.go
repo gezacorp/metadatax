@@ -7,7 +7,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/gezacorp/metadatax"
@@ -22,19 +22,19 @@ func (g *containerIDGetter) GetContainerIDFromPID(pid int) (string, error) {
 
 type containerInspector struct{}
 
-func (*containerInspector) ContainerInspect(ctx context.Context, containerID string) (types.ContainerJSON, error) {
+func (*containerInspector) ContainerInspect(ctx context.Context, containerID string) (container.InspectResponse, error) {
 	file, err := os.Open("testdata/container.json")
 	if err != nil {
-		return types.ContainerJSON{}, err
+		return container.InspectResponse{}, err
 	}
 	content, err := io.ReadAll(file)
 	if err != nil {
-		return types.ContainerJSON{}, err
+		return container.InspectResponse{}, err
 	}
 
-	var containerJSON types.ContainerJSON
+	var containerJSON container.InspectResponse
 	if err := json.Unmarshal(content, &containerJSON); err != nil {
-		return types.ContainerJSON{}, err
+		return container.InspectResponse{}, err
 	}
 
 	return containerJSON, nil
@@ -43,11 +43,10 @@ func (*containerInspector) ContainerInspect(ctx context.Context, containerID str
 func TestGetMetadata(t *testing.T) {
 	t.Parallel()
 
-	collector, err := docker.New(
+	collector := docker.New(
 		docker.WithContainerInspector(&containerInspector{}),
 		docker.WithContainerIDGetter(&containerIDGetter{}),
 	)
-	assert.Nil(t, err)
 
 	expectedLabels := map[string][]string{
 		"docker:cmdline":           {"/docker-entrypoint.sh nginx -g daemon off;"},

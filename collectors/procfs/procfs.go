@@ -18,13 +18,17 @@ import (
 
 const (
 	name = "process"
+
+	basePath = "/proc/cmdline"
 )
 
 type collector struct {
+	hasProcfs       bool
 	extractEnvs     bool
 	processInfoFunc ProcessInfoFunc
 
 	mdContainerInitFunc func() metadatax.MetadataContainer
+	skipOnSoftError     bool
 }
 
 type ProcessInfoFunc func(ctx context.Context, pid int32) (ProcessInfo, error)
@@ -60,6 +64,18 @@ func CollectorWithMetadataContainerInitFunc(fn func() metadatax.MetadataContaine
 	}
 }
 
+func WithForceHasProcFS() CollectorOption {
+	return func(c *collector) {
+		c.hasProcfs = true
+	}
+}
+
+func WithSkipOnSoftError() CollectorOption {
+	return func(c *collector) {
+		c.skipOnSoftError = true
+	}
+}
+
 func New(opts ...CollectorOption) metadatax.Collector {
 	c := &collector{}
 
@@ -85,6 +101,10 @@ func New(opts ...CollectorOption) metadatax.Collector {
 func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContainer, error) {
 	md := c.mdContainerInitFunc()
 
+	if !c.hasProcFS() {
+		return md, nil
+	}
+
 	pid, found := metadatax.PIDFromContext(ctx)
 	if !found {
 		return nil, metadatax.PIDNotFoundError
@@ -92,6 +112,10 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 
 	processInfo, err := c.processInfoFunc(ctx, pid)
 	if err != nil {
+		if c.skipOnSoftError {
+			return md, nil
+		}
+
 		return nil, errors.WrapIf(err, "could not create new process instance")
 	}
 
@@ -215,4 +239,25 @@ func procPath() string {
 	}
 
 	return "/proc"
+}
+
+func (c *collector) hasProcFS() bool {
+	if c.hasProcfs {
+		return true
+	}
+
+	v := HasProcFS()
+	if v {
+		c.hasProcfs = true
+	}
+
+	return v
+}
+
+func HasProcFS() bool {
+	if _, err := os.Stat(basePath); err != nil {
+		return false
+	}
+
+	return true
 }

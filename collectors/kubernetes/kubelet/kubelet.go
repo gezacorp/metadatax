@@ -5,20 +5,19 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 
 	"emperror.dev/errors"
 	corev1 "k8s.io/api/core/v1"
+
+	"github.com/gezacorp/metadatax/collectors/kubernetes"
 )
 
 const (
 	defaultAddress = "127.0.0.1:10250"
 )
-
-type Client interface {
-	GetPods(ctx context.Context) ([]corev1.Pod, error)
-}
 
 type HTTPClient interface {
 	Do(req *http.Request) (*http.Response, error)
@@ -71,7 +70,7 @@ type kubeletClient struct {
 	skipCertVerify bool
 }
 
-func NewClient(opts ...ClientOption) (Client, error) {
+func NewClient(opts ...ClientOption) (kubernetes.PodLister, error) {
 	c := &kubeletClient{}
 
 	for _, f := range opts {
@@ -79,7 +78,11 @@ func NewClient(opts ...ClientOption) (Client, error) {
 	}
 
 	if c.address == "" {
-		c.address = defaultAddress
+		if hn, err := kubernetes.NodeName(); err == nil {
+			c.address = fmt.Sprintf("%s:10250", hn)
+		} else {
+			c.address = defaultAddress
+		}
 	}
 
 	var err error

@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
 	"github.com/gezacorp/metadatax"
@@ -23,7 +24,7 @@ type IMDSClient interface {
 
 type collector struct {
 	imdsClient IMDSClient
-	onEC2      bool
+	onEC2      *bool
 
 	mdContainerInitFunc func() metadatax.MetadataContainer
 }
@@ -38,7 +39,8 @@ func WithIMDSClient(client IMDSClient) CollectorOption {
 
 func WithForceOnEC2() CollectorOption {
 	return func(c *collector) {
-		c.onEC2 = true
+		f := true
+		c.onEC2 = &f
 	}
 }
 
@@ -48,19 +50,11 @@ func CollectorWithMetadataContainerInitFunc(fn func() metadatax.MetadataContaine
 	}
 }
 
-func New(opts ...CollectorOption) (metadatax.Collector, error) {
+func New(opts ...CollectorOption) metadatax.Collector {
 	c := &collector{}
 
 	for _, f := range opts {
 		f(c)
-	}
-
-	if c.imdsClient == nil {
-		if ic, err := NewIMDSDefaultConfig(context.Background()); err != nil {
-			return nil, err
-		} else {
-			c.imdsClient = ic
-		}
 	}
 
 	if c.mdContainerInitFunc == nil {
@@ -69,7 +63,7 @@ func New(opts ...CollectorOption) (metadatax.Collector, error) {
 		}
 	}
 
-	return c, nil
+	return c
 }
 
 func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContainer, error) {
@@ -77,6 +71,14 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 
 	if !c.isOnEC2(ctx) {
 		return md, nil
+	}
+
+	if c.imdsClient == nil {
+		if ic, err := NewIMDSDefaultConfig(ctx); err != nil {
+			return nil, err
+		} else {
+			c.imdsClient = ic
+		}
 	}
 
 	getters := []func(context.Context, metadatax.MetadataContainer){
@@ -149,10 +151,17 @@ func (c *collector) services(ctx context.Context, md metadatax.MetadataContainer
 }
 
 func (c *collector) isOnEC2(ctx context.Context) bool {
-	if c.onEC2 {
-		return true
+	if c.onEC2 != nil {
+		return *c.onEC2
 	}
 
+	isOnEC2 := IsOnEC2(ctx)
+	c.onEC2 = &isOnEC2
+
+	return isOnEC2
+}
+
+func IsOnEC2(ctx context.Context) bool {
 	checks := map[string]func(data []byte) bool{
 		"/sys/hypervisor/uuid": func(data []byte) bool {
 			return bytes.HasPrefix(bytes.ToLower(data), []byte("ec2"))
@@ -177,7 +186,6 @@ func (c *collector) isOnEC2(ctx context.Context) bool {
 			continue
 		}
 		if check(data) {
-			c.onEC2 = true
 			return true
 		}
 	}
@@ -188,10 +196,11 @@ func (c *collector) isOnEC2(ctx context.Context) bool {
 		return false
 	}
 
-	imdsClient := imds.NewFromConfig(cfg)
+	imdsClient := imds.NewFromConfig(cfg, func(opts *imds.Options) {
+		opts.EnableFallback = aws.FalseTernary
+	})
 	iid, err := imdsClient.GetInstanceIdentityDocument(ctx, &imds.GetInstanceIdentityDocumentInput{})
 	if err == nil && iid != nil && iid.InstanceID != "" {
-		c.onEC2 = true
 		return true
 	}
 

@@ -13,7 +13,7 @@ const (
 )
 
 type collector struct {
-	onAzure              bool
+	onAzure              *bool
 	getAzureMetadataFunc GetAzureMetadataFunc
 
 	mdContainerInitFunc func() metadatax.MetadataContainer
@@ -30,7 +30,8 @@ type AzureMetadata interface {
 
 func CollectorWithForceOnAzure() CollectorOption {
 	return func(c *collector) {
-		c.onAzure = true
+		f := true
+		c.onAzure = &f
 	}
 }
 
@@ -159,10 +160,17 @@ func (c *collector) network(md metadatax.MetadataContainer, instance *AzureMetad
 }
 
 func (c *collector) isOnAzure() bool {
-	if c.onAzure {
-		return true
+	if c.onAzure != nil {
+		return *c.onAzure
 	}
 
+	isOnAzure := IsOnAzure()
+	c.onAzure = &isOnAzure
+
+	return isOnAzure
+}
+
+func IsOnAzure() bool {
 	data, err := os.ReadFile("/sys/class/dmi/id/sys_vendor")
 	if err != nil {
 		return false
