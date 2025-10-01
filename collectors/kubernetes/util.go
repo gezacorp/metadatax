@@ -10,8 +10,22 @@ import (
 
 type Cgroup = procfs.Cgroup
 
+func GetProc(pid int) (procfs.Proc, error) {
+	hostProc := os.Getenv("HOST_PROC")
+	if hostProc == "" {
+		return procfs.NewProc(pid)
+	}
+
+	fs, fsErr := procfs.NewFS(hostProc)
+	if fsErr != nil {
+		return procfs.Proc{}, errors.WrapIf(fsErr, "could not create a new procfs")
+	}
+
+	return fs.Proc(pid)
+}
+
 func GetCgroupsForPID(pid int) ([]Cgroup, error) {
-	proc, err := procfs.NewProc(pid)
+	proc, err := GetProc(pid)
 	if err != nil {
 		return nil, errors.WrapIf(err, "could not get process info")
 	}
