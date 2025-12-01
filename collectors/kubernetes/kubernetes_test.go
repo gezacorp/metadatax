@@ -48,7 +48,8 @@ func TestGetMetadata(t *testing.T) {
 		"kubernetes:pod:image:count":                        {"1"},
 		"kubernetes:pod:image:id":                           {"docker.io/rancher/mirrored-metrics-server@sha256:c2dfd72bafd6406ed306d9fbd07f55c496b004293d13d3de88a4567eacc36558"},
 		"kubernetes:pod:image:name":                         {"rancher/mirrored-metrics-server:v0.6.3"},
-		"kubernetes:pod:init-image:count":                   {"0"},
+		"kubernetes:pod:init-image:count":                   {"1"},
+		"kubernetes:pod:init-image:name":                    {"golang:1.24.0-alpine"},
 		"kubernetes:pod:name":                               {"metrics-server-648b5df564-drsb2"},
 		"kubernetes:pod:namespace":                          {"kube-system"},
 		"kubernetes:pod:owner:name":                         {"metrics-server-648b5df564"},
@@ -60,6 +61,48 @@ func TestGetMetadata(t *testing.T) {
 	collector := kubernetes.New(
 		kubernetes.WithPodLister(&kubeletClient{}),
 		kubernetes.WithPodResolver(&podResolver{}),
+	)
+
+	md, err := collector.GetMetadata(metadatax.ContextWithPID(context.Background(), 1))
+	assert.Nil(t, err)
+
+	assert.Equal(t, expectedLabels, map[string][]string(md.GetLabels()))
+}
+
+type initContainerPodResolver struct{}
+
+func (r *initContainerPodResolver) GetPodAndContainerID(pid int32) (string, string, error) {
+	return "5831c41b-55ba-4e82-9c6e-2d3ad9d8bfe9", "fa7b84119285652b6a5391a67629f5c116ccb042e0cacc6605d95dd139360fa4", nil
+}
+
+func TestGetMetadataForInitContainer(t *testing.T) {
+	t.Parallel()
+
+	expectedLabels := map[string][]string{
+		"kubernetes:annotation:kubernetes.io/config.seen":   {"2023-11-23T16:37:13.953323037Z"},
+		"kubernetes:annotation:kubernetes.io/config.source": {"api"},
+		"kubernetes:container:image:id":                     {"docker.io/library/golang@sha256:2d40d4fc278dad38be0777d5e2a88a2c6dee51b0b29c97a764fc6c6a11ca893c"},
+		"kubernetes:container:name":                         {"alpine"},
+		"kubernetes:label:k8s-app":                          {"metrics-server"},
+		"kubernetes:label:pod-template-hash":                {"648b5df564"},
+		"kubernetes:node:name":                              {"lima-k3s"},
+		"kubernetes:pod:ephemeral-image:count":              {"0"},
+		"kubernetes:pod:image:count":                        {"1"},
+		"kubernetes:pod:image:id":                           {"docker.io/rancher/mirrored-metrics-server@sha256:c2dfd72bafd6406ed306d9fbd07f55c496b004293d13d3de88a4567eacc36558"},
+		"kubernetes:pod:image:name":                         {"rancher/mirrored-metrics-server:v0.6.3"},
+		"kubernetes:pod:init-image:count":                   {"1"},
+		"kubernetes:pod:init-image:name":                    {"golang:1.24.0-alpine"},
+		"kubernetes:pod:name":                               {"metrics-server-648b5df564-drsb2"},
+		"kubernetes:pod:namespace":                          {"kube-system"},
+		"kubernetes:pod:owner:name":                         {"metrics-server-648b5df564"},
+		"kubernetes:pod:owner:kind":                         {"replicaset"},
+		"kubernetes:pod:owner:kind-with-version":            {"apps/v1/replicaset"},
+		"kubernetes:pod:serviceaccount":                     {"metrics-server"},
+	}
+
+	collector := kubernetes.New(
+		kubernetes.WithPodLister(&kubeletClient{}),
+		kubernetes.WithPodResolver(&initContainerPodResolver{}),
 	)
 
 	md, err := collector.GetMetadata(metadatax.ContextWithPID(context.Background(), 1))

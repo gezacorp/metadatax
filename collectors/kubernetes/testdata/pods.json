@@ -305,6 +305,35 @@
                         }
                     }
                 ],
+                "initContainers": [
+                    {
+                        "command": [
+                            "sysctl",
+                            "-w",
+                            "net.mptcp.enabled=0"
+                        ],
+                        "image": "golang:1.24.0-alpine",
+                        "imagePullPolicy": "IfNotPresent",
+                        "name": "alpine",
+                        "resources": {},
+                        "securityContext": {
+                            "allowPrivilegeEscalation": true,
+                            "privileged": true,
+                            "readOnlyRootFilesystem": false,
+                            "runAsNonRoot": false,
+                            "runAsUser": 0
+                        },
+                        "terminationMessagePath": "/dev/termination-log",
+                        "terminationMessagePolicy": "File",
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                                "name": "kube-api-access-brc57",
+                                "readOnly": true
+                            }
+                        ]
+                    }
+                ],
                 "restartPolicy": "Always",
                 "terminationGracePeriodSeconds": 30,
                 "dnsPolicy": "ClusterFirst",
@@ -405,6 +434,36 @@
                         "imageID": "docker.io/rancher/mirrored-metrics-server@sha256:c2dfd72bafd6406ed306d9fbd07f55c496b004293d13d3de88a4567eacc36558",
                         "containerID": "containerd://2ce296b740c37b0793e7c95761b32f6a26d8b98b3c0e4e7d5a6032f71520ecad",
                         "started": true
+                    }
+                ],
+                "initContainerStatuses": [
+                    {
+                        "containerID": "containerd://fa7b84119285652b6a5391a67629f5c116ccb042e0cacc6605d95dd139360fa4",
+                        "image": "docker.io/library/golang:1.24.0-alpine",
+                        "imageID": "docker.io/library/golang@sha256:2d40d4fc278dad38be0777d5e2a88a2c6dee51b0b29c97a764fc6c6a11ca893c",
+                        "lastState": {},
+                        "name": "alpine",
+                        "ready": true,
+                        "resources": {},
+                        "restartCount": 57,
+                        "started": false,
+                        "state": {
+                            "terminated": {
+                                "containerID": "containerd://fa7b84119285652b6a5391a67629f5c116ccb042e0cacc6605d95dd139360fa4",
+                                "exitCode": 0,
+                                "finishedAt": "2025-12-01T18:19:31Z",
+                                "reason": "Completed",
+                                "startedAt": "2025-12-01T18:19:31Z"
+                            }
+                        },
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                                "name": "kube-api-access-brc57",
+                                "readOnly": true,
+                                "recursiveReadOnly": "Disabled"
+                            }
+                        ]
                     }
                 ],
                 "qosClass": "Burstable"
