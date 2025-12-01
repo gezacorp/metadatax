@@ -2,6 +2,7 @@ package metadatax
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"sort"
 	"strings"
@@ -92,9 +93,9 @@ func WithStoreAtSegment(store bool) MetadataOption {
 	}
 }
 
-func WithConcurrencySupport() MetadataOption {
+func WithoutConcurrencySupport() MetadataOption {
 	return func(m *metadata) {
-		m.mu = &sync.RWMutex{}
+		m.mu = nil
 	}
 }
 
@@ -119,6 +120,8 @@ func WithAllowEmptyValues(enabled bool) MetadataOption {
 func New(opts ...MetadataOption) MetadataContainer {
 	m := &metadata{
 		Labels: make(Labels),
+
+		mu: &sync.RWMutex{},
 	}
 
 	for _, o := range opts {
@@ -138,8 +141,8 @@ func (m *metadata) Segment(name string, opts ...MetadataOption) MetadataContaine
 		WithPrefix(name),
 		WithMetadata(m),
 	}
-	if m.mu != nil {
-		opts = append(opts, WithConcurrencySupport())
+	if m.mu == nil {
+		opts = append(opts, WithoutConcurrencySupport())
 	}
 
 	return New(append(inheritedOpts, opts...)...)
@@ -210,10 +213,7 @@ func (m *metadata) GetLabelsSlice() []SlicedLabel {
 }
 
 func (m *metadata) AddLabels(labels Labels) MetadataContainer {
-	m.lock()
-	defer m.unlock()
-
-	for k, v := range labels {
+	for k, v := range maps.Clone(labels) {
 		m.AddLabel(k, v...)
 	}
 
