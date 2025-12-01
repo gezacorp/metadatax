@@ -1,8 +1,14 @@
 package node
 
 import (
+	"bytes"
 	"context"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strings"
 
+	"emperror.dev/errors"
 	"github.com/shirou/gopsutil/v3/host"
 
 	"github.com/gezacorp/metadatax"
@@ -42,7 +48,7 @@ func New(opts ...CollectorOption) metadatax.Collector {
 	}
 
 	if c.getHostMetadataFunc == nil {
-		c.getHostMetadataFunc = host.InfoWithContext
+		c.getHostMetadataFunc = getHostMetadata
 	}
 
 	if c.mdContainerInitFunc == nil {
@@ -84,4 +90,33 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 	kernel.AddLabel("arch", info.KernelArch)
 
 	return md, nil
+}
+
+func getHostMetadata(ctx context.Context) (*host.InfoStat, error) {
+	info, err := host.InfoWithContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if v := os.Getenv("MDX_NODE_HOSTNAME"); v != "" {
+		info.Hostname = v
+
+		return info, nil
+	}
+
+	baseDir := "/etc"
+	if v := os.Getenv("HOST_ETC"); v != "" {
+		baseDir = filepath.Clean(v)
+	}
+
+	content, err := os.ReadFile(filepath.Join(baseDir, "hostname"))
+	if errors.Is(err, fs.ErrNotExist) {
+		return info, nil
+	}
+
+	if name := strings.TrimSpace(string(bytes.ToValidUTF8(content, nil))); name != "" {
+		info.Hostname = name
+	}
+
+	return info, nil
 }
