@@ -1,8 +1,12 @@
 package kubernetes
 
 import (
+	"bytes"
+	"crypto/tls"
 	"os"
 	"regexp"
+	"sync"
+	"time"
 
 	"emperror.dev/errors"
 	"github.com/prometheus/procfs"
@@ -52,4 +56,98 @@ func GetContainerIDFromCgroups(cgroups []Cgroup) string {
 
 func NodeName() (string, error) {
 	return os.Hostname()
+}
+
+type CachedCertificate interface {
+	Certificate() (*tls.Certificate, error)
+}
+
+type cachedCertificate struct {
+	cert     *tls.Certificate
+	certFile CachedFile
+	keyFile  CachedFile
+}
+
+func NewCachedCertificate(certFile CachedFile, keyFile CachedFile) CachedCertificate {
+	return &cachedCertificate{
+		certFile: certFile,
+		keyFile:  keyFile,
+	}
+}
+
+func (c *cachedCertificate) Certificate() (*tls.Certificate, error) {
+	certContent, certChanged, err := c.certFile.Content()
+	if err != nil {
+		return nil, errors.WrapIf(err, "could not get certificate")
+	}
+
+	keyContent, keyChanged, err := c.keyFile.Content()
+	if err != nil {
+		return nil, errors.WrapIf(err, "could not get private key")
+	}
+
+	if c.cert == nil || certChanged || keyChanged {
+		cert, err := tls.X509KeyPair(certContent, keyContent)
+		if err != nil {
+			return nil, errors.WrapIf(err, "could not parse x509 key pair")
+		}
+
+		c.cert = &cert
+	}
+
+	return c.cert, nil
+}
+
+type CachedFile interface {
+	Content() ([]byte, bool, error)
+}
+
+type cachedFileContent struct {
+	path     string
+	content  []byte
+	setAt    time.Time
+	lifetime time.Duration
+
+	mu sync.RWMutex
+}
+
+func NewCachedFile(path string, lifetime time.Duration) (*cachedFileContent, error) {
+	f := &cachedFileContent{
+		path:     path,
+		setAt:    time.Now(),
+		lifetime: lifetime,
+	}
+
+	if _, _, err := f.Content(); err != nil {
+		return nil, err
+	}
+	f.content = nil
+
+	return f, nil
+}
+
+func (f *cachedFileContent) Content() ([]byte, bool, error) {
+	f.mu.RLock()
+	if f.content != nil && time.Since(f.setAt) < f.lifetime {
+		f.mu.RUnlock()
+
+		return f.content, false, nil
+	}
+	content := f.content
+	f.mu.RUnlock()
+
+	c, err := os.ReadFile(f.path)
+	if err != nil {
+		return nil, false, errors.WithStackIf(err)
+	}
+
+	changed := !bytes.Equal(c, content)
+	f.mu.Lock()
+	f.content = c
+	f.mu.Unlock()
+
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+
+	return f.content, changed, nil
 }

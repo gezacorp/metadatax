@@ -117,24 +117,11 @@ func PodLister() (kubernetes.PodLister, error) {
 
 		return apiserver.NewClient(opts...)
 	case KubeletSourceType:
-		opts := []kubelet.ClientOption{}
-		if content, err := os.ReadFile(cfg.CACertFile); err != nil {
-			return nil, err
-		} else {
-			opts = append(opts, kubelet.WithCAPEMs(content))
+		opts := []kubelet.ClientOption{
+			kubelet.WithCAPEMFile(cfg.CACertFile),
+			kubelet.WithClientCertPEMFile(cfg.CertFile),
+			kubelet.WithClientKeyPEMFile(cfg.KeyFile),
 		}
-
-		certContent, err := os.ReadFile(cfg.CertFile)
-		if err != nil {
-			return nil, err
-		}
-
-		keyContent, err := os.ReadFile(cfg.KeyFile)
-		if err != nil {
-			return nil, err
-		}
-
-		opts = append(opts, kubelet.WithClientCertPEM(append(certContent, keyContent...)))
 
 		return kubelet.NewClient(opts...)
 	}
