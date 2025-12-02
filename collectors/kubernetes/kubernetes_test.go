@@ -2,9 +2,8 @@ package kubernetes_test
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
-	"io"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -16,19 +15,12 @@ import (
 
 type kubeletClient struct{}
 
+//go:embed testdata/pods.json
+var testPodsJSON []byte
+
 func (c *kubeletClient) GetPods(ctx context.Context) ([]corev1.Pod, error) {
-	file, err := os.Open("testdata/pods.json")
-	if err != nil {
-		return nil, err
-	}
-
-	content, err := io.ReadAll(file)
-	if err != nil {
-		return nil, err
-	}
-
 	var pods corev1.PodList
-	if err := json.Unmarshal(content, &pods); err != nil {
+	if err := json.Unmarshal(testPodsJSON, &pods); err != nil {
 		return nil, err
 	}
 
