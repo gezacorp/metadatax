@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
 	"emperror.dev/errors"
 	corev1 "k8s.io/api/core/v1"
@@ -38,6 +39,9 @@ type collector struct {
 
 	mdContainerInitFunc func() metadatax.MetadataContainer
 	skipOnSoftError     bool
+
+	pods []corev1.Pod
+	mu   sync.Mutex
 }
 
 type CollectorOption func(*collector)
@@ -111,12 +115,21 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 		return md, nil
 	}
 
-	pods, err := c.podLister.GetPods(ctx)
+	pods, err := c.getPods(ctx, false)
 	if err != nil {
 		return nil, errors.WrapIf(err, "could not get pods")
 	}
 
 	podctx, found := c.getPodContext(podID, containerID, pods)
+	// try again with cache refresh
+	if !found {
+		pods, err = c.getPods(ctx, true)
+		if err != nil {
+			return nil, errors.WrapIf(err, "could not get pods")
+		}
+		podctx, found = c.getPodContext(podID, containerID, pods)
+	}
+
 	if !found {
 		return md, nil
 	}
@@ -134,6 +147,21 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 	}
 
 	return md, nil
+}
+
+func (c *collector) getPods(ctx context.Context, skipCache bool) ([]corev1.Pod, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.pods == nil || skipCache {
+		pods, err := c.podLister.GetPods(ctx)
+		if err != nil {
+			return nil, errors.WrapIf(err, "could not get pods")
+		}
+		c.pods = pods
+	}
+
+	return c.pods, nil
 }
 
 func (c *collector) pod(podctx podContext, md metadatax.MetadataContainer) {
@@ -235,6 +263,8 @@ func (c *collector) getPodContext(podID, containerID string, pods []corev1.Pod) 
 	for _, _pod := range pods {
 		if string(_pod.GetUID()) == podID {
 			podContext.pod = _pod
+
+			break
 		}
 	}
 
