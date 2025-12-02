@@ -257,7 +257,7 @@ func (c *kubeletClient) getHTTPClient() (HTTPClient, error) {
 		return nil, err
 	}
 
-	if changed {
+	if changed || (caPEM != nil && c.tlsConfig.RootCAs == nil) {
 		c.tlsConfig.RootCAs = x509.NewCertPool()
 		c.tlsConfig.RootCAs.AppendCertsFromPEM(caPEM)
 	}
