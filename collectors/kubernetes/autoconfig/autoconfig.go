@@ -22,11 +22,12 @@ const (
 type Provider string
 
 const (
-	K3sProvider      Provider = "k3s"
-	KindProvider     Provider = "kind"
-	MicroK8sProvider Provider = "microk8s"
-	GKEProvider      Provider = "gke"
-	EKSProvider      Provider = "eks"
+	K3sProvider       Provider = "k3s"
+	KindProvider      Provider = "kind"
+	MicroK8sProvider  Provider = "microk8s"
+	GKEProvider       Provider = "gke"
+	EKSProvider       Provider = "eks"
+	InClusterProvider Provider = "in-cluster"
 )
 
 type Config struct {
@@ -86,11 +87,20 @@ var configs = []Config{
 		SourceType:     APIServerSourceType,
 		KubeConfigFile: "/var/lib/kubelet/kubeconfig",
 	},
+	{
+		Provider:   InClusterProvider,
+		SourceType: APIServerSourceType,
+		CACertFile: "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt",
+	},
 }
 
 func (c Config) Available() bool {
 	switch c.SourceType {
 	case APIServerSourceType:
+		if c.Provider == InClusterProvider {
+			return everyFileExistsAndReadable(c.CACertFile)
+		}
+
 		return everyFileExistsAndReadable(c.KubeConfigFile)
 	case KubeletSourceType:
 		return everyFileExistsAndReadable(c.CACertFile, c.CertFile, c.KeyFile)
