@@ -249,30 +249,49 @@ func (c *collector) getPodContext(podID, containerID string, pods []corev1.Pod) 
 		}
 	}
 
-	for _, _container := range podContext.pod.Spec.Containers {
-		if _container.Name == podContext.containerStatus.Name {
-			podContext.container = _container
+	if podContext.containerStatus.ContainerID != "" {
+		for _, _container := range podContext.pod.Spec.Containers {
+			if _container.Name == podContext.containerStatus.Name {
+				podContext.container = _container
+
+				return podContext, true
+			}
+		}
+	}
+
+	for _, _containerStatus := range podContext.pod.Status.InitContainerStatuses {
+		if strings.Contains(_containerStatus.ContainerID, containerID) {
+			podContext.containerStatus = _containerStatus
 			break
 		}
 	}
 
-	if podContext.container.Name == "" {
+	if podContext.containerStatus.ContainerID != "" {
 		for _, _container := range podContext.pod.Spec.InitContainers {
 			if _container.Name == podContext.containerStatus.Name {
 				podContext.container = _container
-				break
+
+				return podContext, true
 			}
 		}
 	}
 
-	if podContext.container.Name == "" {
+	for _, _containerStatus := range podContext.pod.Status.EphemeralContainerStatuses {
+		if strings.Contains(_containerStatus.ContainerID, containerID) {
+			podContext.containerStatus = _containerStatus
+			break
+		}
+	}
+
+	if podContext.containerStatus.ContainerID != "" {
 		for _, c := range podContext.pod.Spec.EphemeralContainers {
 			if c.Name == podContext.containerStatus.Name {
 				podContext.container = corev1.Container(c.EphemeralContainerCommon)
-				break
+
+				return podContext, true
 			}
 		}
 	}
 
-	return podContext, true
+	return podContext, false
 }
