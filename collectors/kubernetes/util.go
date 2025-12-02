@@ -129,7 +129,7 @@ func NewCachedFile(path string, lifetime time.Duration) (*cachedFileContent, err
 func (f *cachedFileContent) Content() ([]byte, bool, error) {
 	f.mu.RLock()
 	if f.content != nil && time.Since(f.setAt) < f.lifetime {
-		f.mu.RUnlock()
+		defer f.mu.RUnlock()
 
 		return f.content, false, nil
 	}
