@@ -133,7 +133,7 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 			return nil, errors.WrapIf(err, "could not get pods")
 		}
 		podctx, found = c.getPodContext(podID, containerID, pods)
-		fmt.Printf("!!! %s %s %#v\n", podID, containerID, err)
+		fmt.Printf("!!! %s %s %#v %#v %d\n", podID, containerID, podctx, err, len(pods))
 	}
 
 	if !found {
