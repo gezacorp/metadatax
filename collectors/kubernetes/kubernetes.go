@@ -2,7 +2,6 @@ package kubernetes
 
 import (
 	"context"
-	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -123,13 +122,9 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 		return nil, errors.WrapIf(err, "could not get pods")
 	}
 
-	fmt.Printf("get pod context %s %s\n", podID, containerID)
-
 	podctx, found := c.getPodContext(podID, containerID, pods)
 	// try again with cache refresh
 	if !found {
-		fmt.Printf("not found try again !! get pod context %s %s\n", podID, containerID)
-
 		if pc, err := backoff.Retry(ctx, func() (*podContext, error) {
 			pods, err := c.getPods(ctx, true)
 			if err != nil {
@@ -147,14 +142,6 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 		} else {
 			podctx = *pc
 		}
-
-		// pods, err = c.getPods(ctx, true)
-		// if err != nil {
-		// 	return nil, errors.WrapIf(err, "could not get pods")
-		// }
-		// podctx, found = c.getPodContext(podID, containerID, pods)
-
-		fmt.Printf("!!! %s %s %#v %#v %d\n", podID, containerID, podctx, err, len(pods))
 	}
 
 	if !found {
@@ -172,8 +159,6 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 	for _, f := range getters {
 		f(podctx, md)
 	}
-
-	fmt.Printf("%#v\n", md)
 
 	return md, nil
 }
