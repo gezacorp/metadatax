@@ -6,10 +6,12 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"emperror.dev/errors"
 	corev1 "k8s.io/api/core/v1"
 
+	"github.com/cenkalti/backoff/v5"
 	"github.com/gezacorp/metadatax"
 )
 
@@ -39,6 +41,7 @@ type collector struct {
 
 	mdContainerInitFunc func() metadatax.MetadataContainer
 	skipOnSoftError     bool
+	retryMaxElapsedTime time.Duration
 
 	pods []corev1.Pod
 	mu   sync.Mutex
@@ -70,8 +73,16 @@ func WithSkipOnSoftError() CollectorOption {
 	}
 }
 
+func WithRetryMaxElapsedTime(mt time.Duration) CollectorOption {
+	return func(c *collector) {
+		c.retryMaxElapsedTime = mt
+	}
+}
+
 func New(opts ...CollectorOption) metadatax.Collector {
-	c := &collector{}
+	c := &collector{
+		retryMaxElapsedTime: time.Second * 5,
+	}
 
 	for _, f := range opts {
 		f(c)
@@ -123,11 +134,23 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 	podctx, found := c.getPodContext(podID, containerID, pods)
 	// try again with cache refresh
 	if !found {
-		pods, err = c.getPods(ctx, true)
-		if err != nil {
-			return nil, errors.WrapIf(err, "could not get pods")
+		if pc, err := backoff.Retry(ctx, func() (*podContext, error) {
+			pods, err := c.getPods(ctx, true)
+			if err != nil {
+				return nil, err
+			}
+
+			podctx, found = c.getPodContext(podID, containerID, pods)
+			if !found {
+				return nil, errors.NewPlain("pod context not found")
+			}
+
+			return &podctx, nil
+		}, backoff.WithMaxElapsedTime(c.retryMaxElapsedTime)); err != nil {
+			return nil, errors.WrapIf(err, "could not get pod context after timeout")
+		} else {
+			podctx = *pc
 		}
-		podctx, found = c.getPodContext(podID, containerID, pods)
 	}
 
 	if !found {
@@ -257,6 +280,41 @@ func (c *collector) GetPodAndContainerID(pid int32) (string, string, error) {
 	return "", "", PodAndContainerIDNotFoundError
 }
 
+func (c *collector) getContainerByName(name string, pod corev1.Pod) (corev1.Container, bool) {
+	for _, container := range pod.Spec.Containers {
+		if container.Name == name {
+			return container, true
+		}
+	}
+
+	for _, container := range pod.Spec.InitContainers {
+		if container.Name == name {
+			return container, true
+		}
+	}
+
+	for _, container := range pod.Spec.EphemeralContainers {
+		if container.Name == name {
+			return corev1.Container(container.EphemeralContainerCommon), true
+		}
+	}
+
+	return corev1.Container{}, false
+}
+
+func (c *collector) extractContainerID(containerID string) string {
+	if containerID == "" {
+		return ""
+	}
+
+	parts := strings.SplitN(containerID, "://", 2)
+	if len(parts) == 2 {
+		return strings.TrimSpace(parts[1])
+	}
+
+	return strings.TrimSpace(containerID)
+}
+
 func (c *collector) getPodContext(podID, containerID string, pods []corev1.Pod) (podContext, bool) {
 	podContext := podContext{}
 
@@ -272,56 +330,30 @@ func (c *collector) getPodContext(podID, containerID string, pods []corev1.Pod) 
 		return podContext, false
 	}
 
-	for _, _containerStatus := range podContext.pod.Status.ContainerStatuses {
-		if strings.Contains(_containerStatus.ContainerID, containerID) {
-			podContext.containerStatus = _containerStatus
-			break
-		}
-	}
+	expected := len(podContext.pod.Status.ContainerStatuses) + len(podContext.pod.Status.InitContainerStatuses) + len(podContext.pod.Status.EphemeralContainerStatuses)
+	statuses := map[string]corev1.ContainerStatus{}
 
-	if podContext.containerStatus.ContainerID != "" {
-		for _, _container := range podContext.pod.Spec.Containers {
-			if _container.Name == podContext.containerStatus.Name {
-				podContext.container = _container
-
-				return podContext, true
+	for _, csc := range [][]corev1.ContainerStatus{
+		podContext.pod.Status.ContainerStatuses,
+		podContext.pod.Status.InitContainerStatuses,
+		podContext.pod.Status.EphemeralContainerStatuses,
+	} {
+		for _, status := range csc {
+			if status.ContainerID == "" {
+				continue
 			}
+
+			statuses[c.extractContainerID(status.ContainerID)] = status
 		}
 	}
 
-	for _, _containerStatus := range podContext.pod.Status.InitContainerStatuses {
-		if strings.Contains(_containerStatus.ContainerID, containerID) {
-			podContext.containerStatus = _containerStatus
-			break
-		}
+	if status, ok := statuses[containerID]; ok {
+		podContext.containerStatus = status
+		var found bool
+		podContext.container, found = c.getContainerByName(status.Name, podContext.pod)
+
+		return podContext, found
 	}
 
-	if podContext.containerStatus.ContainerID != "" {
-		for _, _container := range podContext.pod.Spec.InitContainers {
-			if _container.Name == podContext.containerStatus.Name {
-				podContext.container = _container
-
-				return podContext, true
-			}
-		}
-	}
-
-	for _, _containerStatus := range podContext.pod.Status.EphemeralContainerStatuses {
-		if strings.Contains(_containerStatus.ContainerID, containerID) {
-			podContext.containerStatus = _containerStatus
-			break
-		}
-	}
-
-	if podContext.containerStatus.ContainerID != "" {
-		for _, c := range podContext.pod.Spec.EphemeralContainers {
-			if c.Name == podContext.containerStatus.Name {
-				podContext.container = corev1.Container(c.EphemeralContainerCommon)
-
-				return podContext, true
-			}
-		}
-	}
-
-	return podContext, false
+	return podContext, expected == len(statuses)
 }
