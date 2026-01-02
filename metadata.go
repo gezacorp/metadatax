@@ -1,7 +1,6 @@
 package metadatax
 
 import (
-	"fmt"
 	"maps"
 	"slices"
 	"sort"
@@ -166,29 +165,32 @@ func (m *metadata) GetLabelValues(name string) ([]string, bool) {
 
 	s, ok := m.Labels[name]
 
-	return s, ok
+	return slices.Clone(s), ok
 }
 
 func (m *metadata) GetLabels() Labels {
 	m.rlock()
 	defer m.runlock()
 
-	return m.Labels
+	labels := make(Labels, len(m.Labels))
+	for k, vs := range m.Labels {
+		labels[k] = slices.Clone(vs)
+	}
+
+	return labels
 }
 
 func (m *metadata) String() string {
-	var output string
-
-	slice := slices.Clone(m.GetLabelsSlice())
-	sort.SliceStable(slice, func(i, j int) bool {
-		return strings.Compare(slice[i].Name, slice[j].Name) < 0
-	})
+	var output strings.Builder
 
 	for _, l := range m.GetLabelsSlice() {
-		output += fmt.Sprintf("%s=%s\n", l.Name, l.Value)
+		output.WriteString(l.Name)
+		output.WriteByte('=')
+		output.WriteString(l.Value)
+		output.WriteByte('\n')
 	}
 
-	return output
+	return output.String()
 }
 
 func (m *metadata) GetLabelsSlice() []SlicedLabel {
