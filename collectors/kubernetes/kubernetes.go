@@ -330,7 +330,7 @@ func (c *collector) getPodContext(podID, containerID string, pods []corev1.Pod) 
 		return podContext, false
 	}
 
-	expected := len(podContext.pod.Status.ContainerStatuses) + len(podContext.pod.Status.InitContainerStatuses) + len(podContext.pod.Status.EphemeralContainerStatuses)
+    expected := len(podContext.pod.Spec.Containers) + len(podContext.pod.Spec.InitContainers) + len(podContext.pod.Spec.EphemeralContainers)
 	statuses := map[string]corev1.ContainerStatus{}
 
 	for _, csc := range [][]corev1.ContainerStatus{
