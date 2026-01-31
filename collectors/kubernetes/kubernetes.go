@@ -13,6 +13,7 @@ import (
 
 	"github.com/cenkalti/backoff/v5"
 	"github.com/gezacorp/metadatax"
+	"github.com/go-logr/logr"
 )
 
 const (
@@ -103,6 +104,7 @@ func New(opts ...CollectorOption) metadatax.Collector {
 
 func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContainer, error) {
 	md := c.mdContainerInitFunc()
+	logger := logr.FromContextOrDiscard(ctx).WithName("kubernetes")
 
 	if c.podLister == nil {
 		if c.skipOnSoftError {
@@ -131,7 +133,7 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 		return nil, errors.WrapIf(err, "could not get pods")
 	}
 
-	podctx, found := c.getPodContext(podID, containerID, pods)
+	podctx, found := c.getPodContext(logger, podID, containerID, pods)
 	// try again with cache refresh
 	if !found {
 		if pc, err := backoff.Retry(ctx, func() (*podContext, error) {
@@ -140,7 +142,7 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 				return nil, err
 			}
 
-			podctx, found = c.getPodContext(podID, containerID, pods)
+			podctx, found = c.getPodContext(logger, podID, containerID, pods)
 			if !found {
 				return nil, errors.NewPlain("pod context not found")
 			}
@@ -315,7 +317,7 @@ func (c *collector) extractContainerID(containerID string) string {
 	return strings.TrimSpace(containerID)
 }
 
-func (c *collector) getPodContext(podID, containerID string, pods []corev1.Pod) (podContext, bool) {
+func (c *collector) getPodContext(logger logr.Logger, podID, containerID string, pods []corev1.Pod) (podContext, bool) {
 	podContext := podContext{}
 
 	for _, _pod := range pods {
@@ -327,10 +329,11 @@ func (c *collector) getPodContext(podID, containerID string, pods []corev1.Pod) 
 	}
 
 	if podContext.pod.GetName() == "" {
+		logger.Info("Pod not found", "podID", podID)
 		return podContext, false
 	}
 
-    expected := len(podContext.pod.Spec.Containers) + len(podContext.pod.Spec.InitContainers) + len(podContext.pod.Spec.EphemeralContainers)
+	expected := len(podContext.pod.Spec.Containers) + len(podContext.pod.Spec.InitContainers) + len(podContext.pod.Spec.EphemeralContainers)
 	statuses := map[string]corev1.ContainerStatus{}
 
 	for _, csc := range [][]corev1.ContainerStatus{
@@ -352,7 +355,19 @@ func (c *collector) getPodContext(podID, containerID string, pods []corev1.Pod) 
 		var found bool
 		podContext.container, found = c.getContainerByName(status.Name, podContext.pod)
 
+		if !found {
+			logger.Info("Container not found in pod spec, only in status", "containerName", status.Name, "containerID", containerID, "pod", podContext.pod.String())
+		} else if podContext.container.Name != status.Name {
+			logger.Info("Container name mismatch between spec and status", "specName", podContext.container.Name, "statusName", status.Name, "containerID", containerID, "pod", podContext.pod.String())
+		}
+
 		return podContext, found
+	}
+
+	if expected == len(statuses) {
+		logger.Info("Container ID not found in pod status, but conatiners count in pod matches statuses count", "containerID", containerID, "pod", podContext.pod.String())
+	} else {
+		logger.Info("Container ID not found in pod status", "containerID", containerID, "pod", podContext.pod.String())
 	}
 
 	return podContext, expected == len(statuses)

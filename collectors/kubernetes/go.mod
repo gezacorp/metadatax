@@ -4,7 +4,9 @@ go 1.24.4
 
 require (
 	emperror.dev/errors v0.8.1
+	github.com/cenkalti/backoff/v5 v5.0.3
 	github.com/gezacorp/metadatax v0.0.0-20250619152456-c2ae8300820c
+	github.com/go-logr/logr v1.4.2
 	github.com/prometheus/procfs v0.15.1
 	github.com/stretchr/testify v1.10.0
 	k8s.io/api v0.33.0
@@ -18,7 +20,6 @@ require (
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
 	github.com/evanphx/json-patch/v5 v5.9.11 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
-	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
 	github.com/go-openapi/jsonreference v0.20.2 // indirect
 	github.com/go-openapi/swag v0.23.0 // indirect
