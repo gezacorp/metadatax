@@ -468,6 +468,387 @@
                 ],
                 "qosClass": "Burstable"
             }
+        },
+        {
+            "metadata": {
+                "creationTimestamp": "2026-02-02T13:21:53Z",
+                "generateName": "schemareg-74f8949dc-",
+                "generation": 1,
+                "labels": {
+                    "app.kubernetes.io/component": "schemaregistry",
+                    "app.kubernetes.io/instance": "schemareg",
+                    "app.kubernetes.io/name": "schemareg",
+                    "pod-template-hash": "74f8949dc"
+                },
+                "name": "schemareg-74f8949dc-qlbs4",
+                "namespace": "default",
+                "ownerReferences": [
+                    {
+                        "apiVersion": "apps/v1",
+                        "blockOwnerDeletion": true,
+                        "controller": true,
+                        "kind": "ReplicaSet",
+                        "name": "schemareg-74f8949dc",
+                        "uid": "83cf03c7-a39a-482a-8b8a-fe3cf1b09e48"
+                    }
+                ],
+                "resourceVersion": "32644295",
+                "uid": "765a299c-09e2-41b2-9399-bb2738e63029"
+            },
+            "spec": {
+                "containers": [
+                    {
+                        "image": "schema-registry:latest",
+                        "imagePullPolicy": "IfNotPresent",
+                        "livenessProbe": {
+                            "exec": {
+                                "command": [
+                                    "sh",
+                                    "-c",
+                                    "curl --fail --silent --insecure https://schemareg.defautl.svc.cluster.local:8085/subjects --output /dev/null || exit 1\n"
+                                ]
+                            },
+                            "failureThreshold": 3,
+                            "initialDelaySeconds": 60,
+                            "periodSeconds": 30,
+                            "successThreshold": 1,
+                            "timeoutSeconds": 10
+                        },
+                        "name": "schemaregistry",
+                        "ports": [
+                            {
+                                "containerPort": 8085,
+                                "name": "https",
+                                "protocol": "TCP"
+                            }
+                        ],
+                        "resources": {
+                            "limits": {
+                                "cpu": "500m",
+                                "memory": "1Gi"
+                            },
+                            "requests": {
+                                "cpu": "200m",
+                                "memory": "512Mi"
+                            }
+                        },
+                        "terminationMessagePath": "/dev/termination-log",
+                        "terminationMessagePolicy": "File",
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/etc/schema-registry/secrets",
+                                "name": "schema-registry-secrets"
+                            },
+                            {
+                                "mountPath": "/etc/schema-registry/certificates/ca",
+                                "name": "ca-certificate"
+                            },
+                            {
+                                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                                "name": "kube-api-access-s99pm",
+                                "readOnly": true
+                            }
+                        ]
+                    }
+                ],
+                "dnsPolicy": "ClusterFirst",
+                "enableServiceLinks": true,
+                "initContainers": [
+                    {
+                        "command": [
+                            "/bin/bash",
+                            "-c",
+                            "echo \"Generating keystores and truststores for Schema Registry...\"\n\n# Create temporary directory for certificate files\nmkdir -p /tmp/certs\n\n# Generate auth keys for OAuth configuration\necho \"Generating public key for OAuth token verification\"\nopenssl rsa -in /etc/schema-registry/rsakey/private.pem -outform PEM -pubout -out /etc/schema-registry/secrets/public.pem\n\n# Generate keystore and truststore for Schema Registry\necho \"Generating keystore for Schema Registry...\"\n\n\nopenssl x509 -in /etc/schema-registry/certificates/tls.crt -text -noout || echo \"Invalid schemaRegistry TLS certificate\"\nopenssl rsa -in /etc/schema-registry/certificates/tls.key -check -noout || echo \"Invalid schemaRegistry TLS key\"\n\nrm -f /etc/connect/secrets/*.jks\n\n# Convert certificates to PKCS12 format\nopenssl pkcs12 -export \\\n  -in /etc/schema-registry/certificates/tls.crt \\\n  -inkey /etc/schema-registry/certificates/tls.key \\\n  -out /tmp/certs/schemaregistry.p12 \\\n  -name schemaregistry \\\n  -CAfile /etc/schema-registry/certificates/ca/tls.crt \\\n  -caname root || (echo \"Failed to create PKCS12 keystore for Schema Registry\" \u0026\u0026 exit 1)\n\n# Create keystore from PKCS12\nkeytool  \\\n   -destkeystore /etc/schema-registry/secrets/schemaregistry.keystore.jks \\\n  -srckeystore /tmp/certs/schemaregistry.p12 \\\n  -srcstoretype PKCS12 \\\n  -alias schemaregistry || (echo \"ERROR: Failed to create schemaRegistry keystore\" \u0026\u0026 exit 1)\n\n# Create truststore\nkeytool -keystore /etc/schema-registry/secrets/schemaregistry.truststore.jks \\\n  -alias caroot \\\n  -import -file /etc/schema-registry/certificates/ca/tls.crt \\\n   -noprompt || (echo \"ERROR: Failed to create schemaRegistry truststore\" \u0026\u0026 exit 1)\n\nchown -R $(id -u $USER):$(id -g $USER) /etc/schema-registry/secrets/\n\n# List generated files\necho \"Generated files in /etc/schema-registry/secrets:\"\nls -la /etc/schema-registry/secrets\n\n# List keystore contents for verification\necho \"Keystore contents:\"\nkeytool -list -v -keystore /etc/schema-registry/secrets/schemaregistry.keystore.jks  || (echo \"Failed to list keystore contents\" \u0026\u0026 exit 1)\n\n# List truststore contents for verification\necho \"Truststore contents:\"\nkeytool -list -v -keystore /etc/schema-registry/secrets/schemaregistry.truststore.jks  || (echo \"Failed to list truststore contents\" \u0026\u0026 exit 1)\n\necho \"Keystores and truststores generated successfully.\"\n"
+                        ],
+                        "image": "eclipse-temurin:21-jdk",
+                        "imagePullPolicy": "IfNotPresent",
+                        "name": "generate-keystores",
+                        "resources": {},
+                        "terminationMessagePath": "/dev/termination-log",
+                        "terminationMessagePolicy": "File",
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/etc/schema-registry/secrets",
+                                "name": "schema-registry-secrets"
+                            },
+                            {
+                                "mountPath": "/etc/schema-registry/certificates/ca",
+                                "name": "ca-certificate"
+                            },
+                            {
+                                "mountPath": "/etc/schema-registry/certificates",
+                                "name": "schema-registry-cert"
+                            },
+                            {
+                                "mountPath": "/etc/schema-registry/rsakey",
+                                "name": "rsa-key"
+                            },
+                            {
+                                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                                "name": "kube-api-access-s99pm",
+                                "readOnly": true
+                            }
+                        ]
+                    }
+                ],
+                "nodeName": "192-50-2-183",
+                "preemptionPolicy": "PreemptLowerPriority",
+                "priority": 0,
+                "restartPolicy": "Always",
+                "schedulerName": "default-scheduler",
+                "securityContext": {
+                    "fsGroup": 1000,
+                    "runAsGroup": 1000,
+                    "runAsUser": 1000
+                },
+                "serviceAccount": "default",
+                "serviceAccountName": "default",
+                "terminationGracePeriodSeconds": 30,
+                "tolerations": [
+                    {
+                        "effect": "NoExecute",
+                        "key": "node.kubernetes.io/not-ready",
+                        "operator": "Exists",
+                        "tolerationSeconds": 300
+                    },
+                    {
+                        "effect": "NoExecute",
+                        "key": "node.kubernetes.io/unreachable",
+                        "operator": "Exists",
+                        "tolerationSeconds": 300
+                    }
+                ],
+                "volumes": [
+                    {
+                        "emptyDir": {},
+                        "name": "schema-registry-secrets"
+                    },
+                    {
+                        "name": "ca-certificate",
+                        "secret": {
+                            "defaultMode": 420,
+                            "secretName": "ca-certificate"
+                        }
+                    },
+                    {
+                        "name": "rsa-key",
+                        "secret": {
+                            "defaultMode": 420,
+                            "secretName": "rsa-key"
+                        }
+                    },
+                    {
+                        "name": "schema-registry-cert",
+                        "secret": {
+                            "defaultMode": 420,
+                            "secretName": "schemareg-cert"
+                        }
+                    },
+                    {
+                        "name": "kube-api-access-s99pm",
+                        "projected": {
+                            "defaultMode": 420,
+                            "sources": [
+                                {
+                                    "serviceAccountToken": {
+                                        "expirationSeconds": 3607,
+                                        "path": "token"
+                                    }
+                                },
+                                {
+                                    "configMap": {
+                                        "items": [
+                                            {
+                                                "key": "ca.crt",
+                                                "path": "ca.crt"
+                                            }
+                                        ],
+                                        "name": "kube-root-ca.crt"
+                                    }
+                                },
+                                {
+                                    "downwardAPI": {
+                                        "items": [
+                                            {
+                                                "fieldRef": {
+                                                    "apiVersion": "v1",
+                                                    "fieldPath": "metadata.namespace"
+                                                },
+                                                "path": "namespace"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            },
+            "status": {
+                "conditions": [
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-02-02T13:22:24Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "PodReadyToStartContainers"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-02-02T13:22:49Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "Initialized"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-02-02T13:33:41Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "Ready"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-02-02T13:33:41Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "ContainersReady"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-02-02T13:21:53Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "PodScheduled"
+                    }
+                ],
+                "containerStatuses": [
+                    {
+                        "allocatedResources": {
+                            "cpu": "200m",
+                            "memory": "512Mi"
+                        },
+                        "containerID": "containerd://1598284aa5aa67d2ea9c8229b42a0d524136b029532e6729f95f3d1ef42984f5",
+                        "image": "docker.io/schema-registry:latest",
+                        "imageID": "docker.io/schema-registry@sha256:9c1a706e7a40c624d788c2256af0173c664204b7d03dd7013b4560d41e090143",
+                        "lastState": {
+                            "terminated": {
+                                "containerID": "containerd://1598284aa5aa67d2ea9c8229b42a0d524136b029532e6729f95f3d1ef42984f5",
+                                "exitCode": 1,
+                                "finishedAt": "2026-02-02T13:30:54Z",
+                                "reason": "Error",
+                                "startedAt": "2026-02-02T13:30:07Z"
+                            }
+                        },
+                        "name": "schemaregistry",
+                        "ready": true,
+                        "resources": {
+                            "limits": {
+                                "cpu": "500m",
+                                "memory": "1Gi"
+                            },
+                            "requests": {
+                                "cpu": "200m",
+                                "memory": "512Mi"
+                            }
+                        },
+                        "restartCount": 6,
+                        "started": true,
+                        "state": {
+                            "running": {
+                                "startedAt": "2026-02-02T13:33:40Z"
+                            }
+                        },
+                        "user": {
+                            "linux": {
+                                "gid": 1000,
+                                "supplementalGroups": [
+                                    1000
+                                ],
+                                "uid": 1000
+                            }
+                        },
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/etc/schema-registry/secrets",
+                                "name": "schema-registry-secrets"
+                            },
+                            {
+                                "mountPath": "/etc/schema-registry/certificates/ca",
+                                "name": "ca-certificate"
+                            },
+                            {
+                                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                                "name": "kube-api-access-s99pm",
+                                "readOnly": true,
+                                "recursiveReadOnly": "Disabled"
+                            }
+                        ]
+                    }
+                ],
+                "hostIP": "192.50.2.183",
+                "hostIPs": [
+                    {
+                        "ip": "192.50.2.183"
+                    }
+                ],
+                "initContainerStatuses": [
+                    {
+                        "containerID": "containerd://e3b2c3cf279b379b48197ab810cfaba62bde1b3ce5025e2837e2a541fa43731d",
+                        "image": "docker.io/library/eclipse-temurin:21-jdk",
+                        "imageID": "docker.io/library/eclipse-temurin@sha256:e8d57b6c5c73d93212a4384f588309b44bc75fd15b38f78e6a6db1b350dc4ef3",
+                        "lastState": {},
+                        "name": "generate-keystores",
+                        "ready": true,
+                        "resources": {},
+                        "restartCount": 0,
+                        "started": false,
+                        "state": {
+                            "terminated": {
+                                "containerID": "containerd://e3b2c3cf279b379b48197ab810cfaba62bde1b3ce5025e2837e2a541fa43731d",
+                                "exitCode": 0,
+                                "finishedAt": "2026-02-02T13:22:27Z",
+                                "reason": "Completed",
+                                "startedAt": "2026-02-02T13:22:23Z"
+                            }
+                        },
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/etc/schema-registry/secrets",
+                                "name": "schema-registry-secrets"
+                            },
+                            {
+                                "mountPath": "/etc/schema-registry/certificates/ca",
+                                "name": "ca-certificate"
+                            },
+                            {
+                                "mountPath": "/etc/schema-registry/certificates",
+                                "name": "schema-registry-cert"
+                            },
+                            {
+                                "mountPath": "/etc/schema-registry/rsakey",
+                                "name": "rsa-key"
+                            },
+                            {
+                                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                                "name": "kube-api-access-s99pm",
+                                "readOnly": true,
+                                "recursiveReadOnly": "Disabled"
+                            }
+                        ]
+                    }
+                ],
+                "observedGeneration": 1,
+                "phase": "Running",
+                "podIP": "10.50.2.243",
+                "podIPs": [
+                    {
+                        "ip": "10.50.2.243"
+                    }
+                ],
+                "qosClass": "Burstable",
+                "startTime": "2026-02-02T13:21:53Z"
+            }
         }
     ]
 }
