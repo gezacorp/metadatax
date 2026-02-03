@@ -103,7 +103,6 @@ func New(opts ...CollectorOption) metadatax.Collector {
 
 func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContainer, error) {
 	md := c.mdContainerInitFunc()
-
 	if c.podLister == nil {
 		if c.skipOnSoftError {
 			return md, nil
@@ -340,6 +339,13 @@ func (c *collector) getPodContext(podID, containerID string, pods []corev1.Pod) 
 	} {
 		for _, status := range csc {
 			if status.ContainerID == "" {
+				continue
+			}
+
+			if status.LastTerminationState.Terminated != nil && status.LastTerminationState.Terminated.ContainerID == status.ContainerID {
+				// The container ID refers to a container that has already terminated.
+				// This indicates the pod status has not yet been updated with the new container ID.
+				// Skip this status to avoid using stale container information.
 				continue
 			}
 

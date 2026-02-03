@@ -75,6 +75,12 @@ func (r *initContainerPodResolver) GetPodAndContainerID(pid int32) (string, stri
 	return "5831c41b-55ba-4e82-9c6e-2d3ad9d8bfe9", "fa7b84119285652b6a5391a67629f5c116ccb042e0cacc6605d95dd139360fa4", nil
 }
 
+type failedContainerPodResolver struct{}
+
+func (r *failedContainerPodResolver) GetPodAndContainerID(pid int32) (string, string, error) {
+	return "83cf03c7-a39a-482a-8b8a-fe3cf1b09e48", "1598284aa5aa67d2ea9c8229b42a0d524136b029532e6729f95f3d1ef42984f5", nil
+}
+
 func TestGetMetadataForInitContainer(t *testing.T) {
 	t.Parallel()
 
@@ -109,4 +115,17 @@ func TestGetMetadataForInitContainer(t *testing.T) {
 	assert.Nil(t, err)
 
 	assert.Equal(t, expectedLabels, map[string][]string(md.GetLabels()))
+}
+
+func TestGetMetadataForFailedContainer(t *testing.T) {
+	t.Parallel()
+
+	collector := kubernetes.New(
+		kubernetes.WithPodLister(&kubeletClient{}),
+		kubernetes.WithPodResolver(&failedContainerPodResolver{}),
+	)
+
+	_, err := collector.GetMetadata(metadatax.ContextWithPID(context.Background(), 1))
+	assert.EqualErrorf(t, err, "could not get pod context after timeout: pod context not found", "error message %s")
+
 }
