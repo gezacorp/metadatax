@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/shirou/gopsutil/v3/host"
+	"github.com/shirou/gopsutil/v3/net"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/gezacorp/metadatax"
@@ -26,6 +27,12 @@ func TestGetMetadata(t *testing.T) {
 		"node:uuid":                {"9c4f3853-4193-4700-ae6e-f23c61fd120c"},
 		"node:virtualization:type": {"xen"},
 		"node:virtualization:role": {"guest"},
+
+		"node:network:interface:count":           {"1"},
+		"node:network:interface:lo0:ip":          {"127.0.0.1/8", "::1/128"},
+		"node:network:interface:lo0:mac_address": {"3a:f3:9f:a1:81:d0"},
+		"node:network:interface:lo0:mtu":         {"1500"},
+		"node:network:interface:name":            {"lo0"},
 	}
 
 	collector := node.New(
@@ -41,6 +48,24 @@ func TestGetMetadata(t *testing.T) {
 				KernelArch:           "aarch64",
 				VirtualizationSystem: "xen",
 				VirtualizationRole:   "guest",
+			}, nil
+		}),
+		node.CollectorWithGetNetworkInterfacesFunc(func(context.Context) (net.InterfaceStatList, error) {
+			return []net.InterfaceStat{
+				{
+					Index:        0,
+					MTU:          1500,
+					Name:         "lo0",
+					HardwareAddr: "3a:f3:9f:a1:81:d0",
+					Addrs: []net.InterfaceAddr{
+						{
+							Addr: "127.0.0.1/8",
+						},
+						{
+							Addr: "::1/128",
+						},
+					},
+				},
 			}, nil
 		}),
 		node.CollectorWithMetadataContainerInitFunc(func() metadatax.MetadataContainer {

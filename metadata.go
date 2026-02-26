@@ -140,8 +140,9 @@ func (m *metadata) Segment(name string, opts ...MetadataOption) MetadataContaine
 		WithPrefix(name),
 		WithMetadata(m),
 	}
+
 	if m.mu == nil {
-		opts = append(opts, WithoutConcurrencySupport())
+		inheritedOpts = append(inheritedOpts, WithoutConcurrencySupport())
 	}
 
 	return New(append(inheritedOpts, opts...)...)
@@ -227,7 +228,7 @@ func (m *metadata) AddLabel(name string, values ...string) MetadataContainer {
 	defer m.unlock()
 
 	if !m.opts.allowEmptyValues {
-		if values == nil {
+		if len(values) == 0 {
 			return m
 		}
 		_values := values[:0]
@@ -245,7 +246,7 @@ func (m *metadata) AddLabel(name string, values ...string) MetadataContainer {
 
 	if m.opts.prefix != "" {
 		if name != "" {
-			name = strings.Join([]string{m.opts.prefix, m.opts.segmentSeparator, name}, "")
+			name = m.opts.prefix + m.opts.segmentSeparator + name
 		} else {
 			name = m.opts.prefix
 		}

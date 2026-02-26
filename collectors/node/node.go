@@ -6,10 +6,12 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"emperror.dev/errors"
 	"github.com/shirou/gopsutil/v3/host"
+	"github.com/shirou/gopsutil/v3/net"
 
 	"github.com/gezacorp/metadatax"
 )
@@ -19,18 +21,28 @@ const (
 )
 
 type collector struct {
-	getHostMetadataFunc GetHostMetadataFunc
+	getHostMetadataFunc      GetHostMetadataFunc
+	getNetworkInterfacesFunc GetNetworkInterfacesFunc
 
 	mdContainerInitFunc func() metadatax.MetadataContainer
 }
 
 type CollectorOption func(*collector)
 
-type GetHostMetadataFunc func(context.Context) (*host.InfoStat, error)
+type (
+	GetHostMetadataFunc      func(context.Context) (*host.InfoStat, error)
+	GetNetworkInterfacesFunc func(context.Context) (net.InterfaceStatList, error)
+)
 
 func CollectorWithGetHostMetadataFunc(fn GetHostMetadataFunc) CollectorOption {
 	return func(c *collector) {
 		c.getHostMetadataFunc = fn
+	}
+}
+
+func CollectorWithGetNetworkInterfacesFunc(fn GetNetworkInterfacesFunc) CollectorOption {
+	return func(c *collector) {
+		c.getNetworkInterfacesFunc = fn
 	}
 }
 
@@ -41,14 +53,13 @@ func CollectorWithMetadataContainerInitFunc(fn func() metadatax.MetadataContaine
 }
 
 func New(opts ...CollectorOption) metadatax.Collector {
-	c := &collector{}
+	c := &collector{
+		getHostMetadataFunc:      getHostMetadata,
+		getNetworkInterfacesFunc: getNetworkInterfaces,
+	}
 
 	for _, f := range opts {
 		f(c)
-	}
-
-	if c.getHostMetadataFunc == nil {
-		c.getHostMetadataFunc = getHostMetadata
 	}
 
 	if c.mdContainerInitFunc == nil {
@@ -89,7 +100,29 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 	kernel.AddLabel("version", info.KernelVersion)
 	kernel.AddLabel("arch", info.KernelArch)
 
+	ifaces, err := c.getNetworkInterfacesFunc(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	ifacesMd := md.Segment("network").Segment("interface")
+	ifacesMd.AddLabel("count", strconv.Itoa(len(ifaces)))
+	for _, iface := range ifaces {
+		ifacesMd.AddLabel("name", iface.Name)
+		ifaceMd := ifacesMd.Segment(iface.Name).
+			AddLabel("mac_address", iface.HardwareAddr).
+			AddLabel("mtu", strconv.Itoa(iface.MTU))
+
+		for _, addr := range iface.Addrs {
+			ifaceMd.AddLabel("ip", addr.Addr)
+		}
+	}
+
 	return md, nil
+}
+
+func getNetworkInterfaces(ctx context.Context) (net.InterfaceStatList, error) {
+	return net.InterfacesWithContext(ctx)
 }
 
 func getHostMetadata(ctx context.Context) (*host.InfoStat, error) {
