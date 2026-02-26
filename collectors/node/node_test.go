@@ -28,12 +28,16 @@ func TestGetMetadata(t *testing.T) {
 		"node:virtualization:type": {"xen"},
 		"node:virtualization:role": {"guest"},
 
-		"node:network:interface:count":           {"1"},
-		"node:network:interface:lo0:ip":          {"127.0.0.1/8", "::1/128"},
-		"node:network:interface:lo0:mac_address": {"3a:f3:9f:a1:81:d0"},
-		"node:network:interface:lo0:mtu":         {"1500"},
-		"node:network:interface:name":            {"lo0"},
-		"node:network:interface:lo0:index":       {"0"},
+		"node:network:interface:count":            {"1"},
+		"node:network:interface:lo0:ip":           {"127.0.0.1/8", "::1/128"},
+		"node:network:interface:lo0:ip:0:address": {"127.0.0.1/8"},
+		"node:network:interface:lo0:ip:0:type":    {"private"},
+		"node:network:interface:lo0:ip:1:address": {"::1/128"},
+		"node:network:interface:lo0:ip:1:type":    {"private"},
+		"node:network:interface:lo0:mac_address":  {"3a:f3:9f:a1:81:d0"},
+		"node:network:interface:lo0:mtu":          {"1500"},
+		"node:network:interface:name":             {"lo0"},
+		"node:network:interface:lo0:index":        {"0"},
 	}
 
 	collector := node.New(

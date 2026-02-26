@@ -114,7 +114,13 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 			AddLabel("mtu", strconv.Itoa(iface.MTU)).
 			AddLabel("index", strconv.Itoa(iface.Index))
 
-		for _, addr := range iface.Addrs {
+		for i, addr := range iface.Addrs {
+			t := "public"
+			if IsInternalIP(addr.Addr) {
+				t = "private"
+			}
+
+			ifaceMd.Segment("ip").Segment(strconv.Itoa(i)).AddLabel("address", addr.Addr).AddLabel("type", t)
 			ifaceMd.AddLabel("ip", addr.Addr)
 		}
 	}
