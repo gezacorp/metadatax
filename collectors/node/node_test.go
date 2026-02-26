@@ -33,6 +33,7 @@ func TestGetMetadata(t *testing.T) {
 		"node:network:interface:lo0:mac_address": {"3a:f3:9f:a1:81:d0"},
 		"node:network:interface:lo0:mtu":         {"1500"},
 		"node:network:interface:name":            {"lo0"},
+		"node:network:interface:lo0:index":       {"0"},
 	}
 
 	collector := node.New(

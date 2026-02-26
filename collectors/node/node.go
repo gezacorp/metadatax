@@ -111,7 +111,8 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 		ifacesMd.AddLabel("name", iface.Name)
 		ifaceMd := ifacesMd.Segment(iface.Name).
 			AddLabel("mac_address", iface.HardwareAddr).
-			AddLabel("mtu", strconv.Itoa(iface.MTU))
+			AddLabel("mtu", strconv.Itoa(iface.MTU)).
+			AddLabel("index", strconv.Itoa(iface.Index))
 
 		for _, addr := range iface.Addrs {
 			ifaceMd.AddLabel("ip", addr.Addr)
