@@ -113,7 +113,7 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 
 	pid, found := metadatax.PIDFromContext(ctx)
 	if !found {
-		return nil, metadatax.PIDNotFoundError
+		return nil, metadatax.ErrPIDNotFound
 	}
 
 	podID, containerID, err := c.podResolver.GetPodAndContainerID(pid)
@@ -329,7 +329,7 @@ func (c *collector) getPodContext(podID, containerID string, pods []corev1.Pod) 
 		return podContext, false
 	}
 
-    expected := len(podContext.pod.Spec.Containers) + len(podContext.pod.Spec.InitContainers) + len(podContext.pod.Spec.EphemeralContainers)
+	expected := len(podContext.pod.Spec.Containers) + len(podContext.pod.Spec.InitContainers) + len(podContext.pod.Spec.EphemeralContainers)
 	statuses := map[string]corev1.ContainerStatus{}
 
 	for _, csc := range [][]corev1.ContainerStatus{

@@ -2,14 +2,11 @@ package procfs
 
 import (
 	"context"
-	_ "crypto/sha256"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
 	"emperror.dev/errors"
-	"github.com/opencontainers/go-digest"
 	"github.com/shirou/gopsutil/v4/net"
 	"github.com/shirou/gopsutil/v4/process"
 
@@ -29,6 +26,8 @@ type collector struct {
 
 	mdContainerInitFunc func() metadatax.MetadataContainer
 	skipOnSoftError     bool
+
+	binaryHasher *binaryHasher
 }
 
 type ProcessInfoFunc func(ctx context.Context, pid int32) (ProcessInfo, error)
@@ -95,6 +94,8 @@ func New(opts ...CollectorOption) metadatax.Collector {
 		}
 	}
 
+	c.binaryHasher = newBinaryHasher()
+
 	return c
 }
 
@@ -107,7 +108,7 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 
 	pid, found := metadatax.PIDFromContext(ctx)
 	if !found {
-		return nil, metadatax.PIDNotFoundError
+		return nil, metadatax.ErrPIDNotFound
 	}
 
 	processInfo, err := c.processInfoFunc(ctx, pid)
@@ -151,25 +152,21 @@ func (c *collector) base(ctx context.Context, processInfo ProcessInfo, md metada
 }
 
 func (c *collector) uids(ctx context.Context, processInfo ProcessInfo, md metadatax.MetadataContainer) {
-	if uids, err := processInfo.UidsWithContext(ctx); err == nil {
-		if len(uids) == 4 {
-			uidmd := md.Segment("uid")
-			uidmd.AddLabel("", strconv.Itoa(int(uids[1])))
-			uidmd.AddLabel("real", strconv.Itoa(int(uids[0])))
-			uidmd.AddLabel("effective", strconv.Itoa(int(uids[1])))
-		}
+	if uids, err := processInfo.UidsWithContext(ctx); err == nil && len(uids) >= 2 {
+		uidmd := md.Segment("uid")
+		uidmd.AddLabel("real", strconv.Itoa(int(uids[0])))
+		uidmd.AddLabel("effective", strconv.Itoa(int(uids[1])))
+		uidmd.AddLabel("", strconv.Itoa(int(uids[1])))
 	}
 }
 
 func (c *collector) gids(ctx context.Context, processInfo ProcessInfo, md metadatax.MetadataContainer) {
 	gidmd := md.Segment("gid")
 
-	if gids, err := processInfo.GidsWithContext(ctx); err == nil {
-		if len(gids) == 4 {
-			gidmd.AddLabel("", strconv.Itoa(int(gids[1])))
-			gidmd.AddLabel("real", strconv.Itoa(int(gids[0])))
-			gidmd.AddLabel("effective", strconv.Itoa(int(gids[1])))
-		}
+	if gids, err := processInfo.GidsWithContext(ctx); err == nil && len(gids) >= 2 {
+		gidmd.AddLabel("real", strconv.Itoa(int(gids[0])))
+		gidmd.AddLabel("effective", strconv.Itoa(int(gids[1])))
+		gidmd.AddLabel("", strconv.Itoa(int(gids[1])))
 	}
 
 	if groups, err := processInfo.GroupsWithContext(ctx); err == nil {
@@ -200,15 +197,8 @@ func (c *collector) binary(ctx context.Context, processInfo ProcessInfo, md meta
 		bmd.AddLabel("path", exe)
 
 		pid, _ := metadatax.PIDFromContext(ctx)
-		file, err := os.Open(filepath.Join(procPath(), strconv.Itoa(int(pid)), "exe"))
-		if errors.Is(err, os.ErrNotExist) {
-			file, err = os.Open(exe)
-		}
-		if err != nil {
-			return
-		}
 
-		hash, err := digest.SHA256.FromReader(file)
+		hash, err := c.binaryHasher.Hash(pid, exe)
 		if err != nil {
 			return
 		}

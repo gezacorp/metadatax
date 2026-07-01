@@ -157,7 +157,7 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 
 	pid, found := metadatax.PIDFromContext(ctx)
 	if !found {
-		return nil, metadatax.PIDNotFoundError
+		return nil, metadatax.ErrPIDNotFound
 	}
 
 	containerID, err := c.containerIDGetter.GetContainerIDFromPID(int(pid))

@@ -3,13 +3,13 @@ module github.com/gezacorp/metadatax/collectors/node
 go 1.24.4
 
 require (
+	emperror.dev/errors v0.8.1
 	github.com/gezacorp/metadatax v0.0.0-20250619152456-c2ae8300820c
 	github.com/shirou/gopsutil/v3 v3.24.5
 	github.com/stretchr/testify v1.9.0
 )
 
 require (
-	emperror.dev/errors v0.8.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/google/uuid v1.4.0 // indirect

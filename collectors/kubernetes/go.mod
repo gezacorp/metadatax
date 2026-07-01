@@ -4,6 +4,7 @@ go 1.24.4
 
 require (
 	emperror.dev/errors v0.8.1
+	github.com/cenkalti/backoff/v5 v5.0.3
 	github.com/gezacorp/metadatax v0.0.0-20250619152456-c2ae8300820c
 	github.com/prometheus/procfs v0.15.1
 	github.com/stretchr/testify v1.10.0
