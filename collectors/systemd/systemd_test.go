@@ -2,8 +2,10 @@ package systemd_test
 
 import (
 	"context"
+	"os"
 	"testing"
 
+	"github.com/shirou/gopsutil/v4/process"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/gezacorp/metadatax"
@@ -94,6 +96,20 @@ func TestGetMetadata(t *testing.T) {
 	md, err := collector.GetMetadata(ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedLabels, map[string][]string(md.GetLabels()))
+}
+
+func TestGetMetadataProcessNotRunning(t *testing.T) {
+	t.Parallel()
+
+	collector := systemd.New(
+		systemd.WithForceHasSystemd(),
+		systemd.WithUnitNameGetter(&unitNameGetter{err: os.ErrNotExist}),
+	)
+
+	ctx := metadatax.ContextWithPID(context.Background(), 1234)
+
+	_, err := collector.GetMetadata(ctx)
+	assert.ErrorIs(t, err, process.ErrorProcessNotRunning)
 }
 
 func TestGetMetadataNoUnit(t *testing.T) {

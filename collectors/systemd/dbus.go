@@ -35,6 +35,10 @@ type dbusUnitNameGetter struct{}
 // etc. - since systemd resolves it internally rather than us re-deriving it
 // from cgroup path shape.
 func (dbusUnitNameGetter) GetUnitNameForPID(pid int) (string, error) {
+	if pid < 0 {
+		return "", errors.New("invalid pid: must not be negative")
+	}
+
 	ctx := context.Background()
 
 	conn, err := systemddbus.NewSystemConnectionContext(ctx)
@@ -55,8 +59,15 @@ func (dbusUnitNameGetter) GetUnitNameForPID(pid int) (string, error) {
 	// GetUnitNameByPID reports the same error whether pid doesn't exist or
 	// simply isn't unit-tracked; process.PidExists tells those two cases
 	// apart so the caller can still distinguish "process gone" (os.ErrNotExist)
-	// from "process alive, no unit" (empty name, no error).
-	if exists, existsErr := process.PidExists(int32(pid)); existsErr == nil && !exists {
+	// from "process alive, no unit" (empty name, no error). A failure of the
+	// existence check itself is a real error and must not be silently
+	// treated as either case.
+	exists, err := process.PidExists(int32(pid))
+	if err != nil {
+		return "", err
+	}
+
+	if !exists {
 		return "", os.ErrNotExist
 	}
 
