@@ -7,7 +7,7 @@ import (
 
 var pidContextKey = contextKey{"process.pid"}
 
-var PIDNotFoundError = errors.New("pid is not found in context")
+var ErrPIDNotFound = errors.New("pid is not found in context")
 
 func ContextWithPID(ctx context.Context, pid int32) context.Context {
 	return context.WithValue(ctx, pidContextKey, pid)

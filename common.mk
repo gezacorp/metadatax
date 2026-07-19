@@ -14,7 +14,7 @@
 
 REPO_ROOT=$(shell git rev-parse --show-toplevel)
 
-GOLANGCI_VERSION = 1.64.3
+GOLANGCI_VERSION = 2.12.2
 
 .PHONY: fmt
 fmt: ## Run go fmt against code
@@ -31,9 +31,8 @@ tidy: ## Execute go mod tidy
 
 ${REPO_ROOT}/bin/golangci-lint-${GOLANGCI_VERSION}:
 	@mkdir -p ${REPO_ROOT}/bin
-	@mkdir -p bin
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | bash -s v${GOLANGCI_VERSION}
-	@mv bin/golangci-lint $@
+	GOBIN=${REPO_ROOT}/bin go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v${GOLANGCI_VERSION}
+	@mv ${REPO_ROOT}/bin/golangci-lint $@
 
 ${REPO_ROOT}/bin/golangci-lint: ${REPO_ROOT}/bin/golangci-lint-${GOLANGCI_VERSION}
 	@ln -sf golangci-lint-${GOLANGCI_VERSION} ${REPO_ROOT}/bin/golangci-lint
