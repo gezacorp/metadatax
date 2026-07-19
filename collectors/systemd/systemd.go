@@ -30,12 +30,6 @@ type UnitPropertiesGetter interface {
 	GetUnitProperties(ctx context.Context, unitName string) (map[string]any, error)
 }
 
-type unitNameGetterFunc func(pid int) (string, error)
-
-func (f unitNameGetterFunc) GetUnitNameForPID(pid int) (string, error) {
-	return f(pid)
-}
-
 type collector struct {
 	unitNameGetter       UnitNameGetter
 	unitPropertiesGetter UnitPropertiesGetter
@@ -92,7 +86,7 @@ func New(opts ...CollectorOption) metadatax.Collector {
 	}
 
 	if c.unitNameGetter == nil {
-		c.unitNameGetter = unitNameGetterFunc(GetUnitNameForPID)
+		c.unitNameGetter = dbusUnitNameGetter{}
 	}
 
 	if c.unitPropertiesGetter == nil {
@@ -122,6 +116,11 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 
 	unitName, err := c.unitNameGetter.GetUnitNameForPID(int(pid))
 	if err != nil {
+		// os.ErrNotExist here means /proc/<pid> vanished while reading its
+		// cgroup, i.e. the process itself exited - a meaningful, specific
+		// signal worth its own sentinel. GetUnitProperties below has no
+		// equivalent: a failure there is a D-Bus fault about the unit, not
+		// the process, so it doesn't get this same translation.
 		if errors.Is(err, os.ErrNotExist) {
 			if c.skipOnSoftError {
 				return md, nil
@@ -130,38 +129,18 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 			return nil, process.ErrorProcessNotRunning
 		}
 
-		if c.skipOnSoftError {
-			return md, nil
-		}
-
-		return nil, errors.WrapIfWithDetails(err, "could not get systemd unit for pid", "pid", pid)
+		return c.softErrOrWrap(md, err, "could not get systemd unit for pid", "pid", pid)
 	}
 
 	if unitName == "" {
-		if c.skipOnSoftError {
-			return md, nil
-		}
-
-		return nil, errors.WithDetails(ErrUnitNotFound, "pid", pid)
+		return c.softErrOrWrap(md, ErrUnitNotFound, "", "pid", pid)
 	}
 
 	md.AddLabel("unit", unitName)
 
 	properties, err := c.unitPropertiesGetter.GetUnitProperties(ctx, unitName)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			if c.skipOnSoftError {
-				return md, nil
-			}
-
-			return nil, process.ErrorProcessNotRunning
-		}
-
-		if c.skipOnSoftError {
-			return md, nil
-		}
-
-		return nil, errors.WrapIfWithDetails(err, "could not get systemd unit properties", "unit", unitName)
+		return c.softErrOrWrap(md, err, "could not get systemd unit properties", "unit", unitName)
 	}
 
 	getters := []func(map[string]any, metadatax.MetadataContainer){
@@ -178,6 +157,23 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 	}
 
 	return md, nil
+}
+
+// softErrOrWrap centralizes the "skip or fail" decision shared by every
+// error path in GetMetadata: swallow err and return the metadata gathered
+// so far when skipOnSoftError is set, otherwise fail with err wrapped in msg
+// and kv (or err itself, with kv attached, when msg is empty - used for
+// ErrUnitNotFound, which is already a self-describing sentinel).
+func (c *collector) softErrOrWrap(md metadatax.MetadataContainer, err error, msg string, kv ...any) (metadatax.MetadataContainer, error) {
+	if c.skipOnSoftError {
+		return md, nil
+	}
+
+	if msg == "" {
+		return nil, errors.WithDetails(err, kv...)
+	}
+
+	return nil, errors.WrapIfWithDetails(err, msg, kv...)
 }
 
 func (c *collector) base(properties map[string]any, md metadatax.MetadataContainer) {

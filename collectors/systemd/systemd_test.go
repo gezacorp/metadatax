@@ -112,6 +112,34 @@ func TestGetMetadataNoUnit(t *testing.T) {
 	assert.Empty(t, md.GetLabels())
 }
 
+func TestGetMetadataEnvNormalizesCaseAndMergesUnderOneKey(t *testing.T) {
+	t.Parallel()
+
+	// Env var names are uppercased so case variants of the same logical
+	// variable (e.g. http_proxy/HTTP_PROXY, a common cross-tool
+	// compatibility pattern) are reported under one canonical label; if
+	// they carry different values, AddLabel's normal multi-value behavior
+	// surfaces both rather than silently picking one.
+	collector := systemd.New(
+		systemd.WithForceHasSystemd(),
+		systemd.CollectorWithExtractENVs(),
+		systemd.WithUnitNameGetter(&unitNameGetter{unitName: "nginx.service"}),
+		systemd.WithUnitPropertiesGetter(&unitPropertiesGetter{
+			properties: map[string]any{
+				"Environment": []string{"http_proxy=http://proxy1", "HTTP_PROXY=http://proxy2"},
+			},
+		}),
+	)
+
+	ctx := metadatax.ContextWithPID(context.Background(), 1234)
+
+	md, err := collector.GetMetadata(ctx)
+	assert.NoError(t, err)
+
+	labels := md.GetLabels()
+	assert.ElementsMatch(t, []string{"http://proxy1", "http://proxy2"}, labels["systemd:env:HTTP_PROXY"])
+}
+
 func TestGetMetadataNoSystemd(t *testing.T) {
 	t.Parallel()
 
