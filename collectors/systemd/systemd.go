@@ -130,18 +130,18 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 			return nil, errors.WithDetails(process.ErrorProcessNotRunning, "pid", pid)
 		}
 
-		return c.softErrOrWrap(md, err, "could not get systemd unit for pid", "pid", pid)
+		return c.softErrOrWrapf(md, err, "could not get systemd unit for pid", "pid", pid)
 	}
 
 	if unitName == "" {
-		return c.softErrOrWrap(md, ErrUnitNotFound, "", "pid", pid)
+		return c.softErrOrDetails(md, ErrUnitNotFound, "pid", pid)
 	}
 
 	md.AddLabel("unit", unitName)
 
 	properties, err := c.unitPropertiesGetter.GetUnitProperties(ctx, unitName)
 	if err != nil {
-		return c.softErrOrWrap(md, err, "could not get systemd unit properties", "unit", unitName)
+		return c.softErrOrWrapf(md, err, "could not get systemd unit properties", "unit", unitName)
 	}
 
 	getters := []func(map[string]any, metadatax.MetadataContainer){
@@ -160,21 +160,26 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 	return md, nil
 }
 
-// softErrOrWrap centralizes the "skip or fail" decision shared by every
-// error path in GetMetadata: swallow err and return the metadata gathered
-// so far when skipOnSoftError is set, otherwise fail with err wrapped in msg
-// and kv (or err itself, with kv attached, when msg is empty - used for
-// ErrUnitNotFound, which is already a self-describing sentinel).
-func (c *collector) softErrOrWrap(md metadatax.MetadataContainer, err error, msg string, kv ...any) (metadatax.MetadataContainer, error) {
+// softErrOrWrapf swallows err and returns the metadata gathered so far when
+// skipOnSoftError is set, otherwise fails with err wrapped in msg and kv.
+func (c *collector) softErrOrWrapf(md metadatax.MetadataContainer, err error, msg string, kv ...any) (metadatax.MetadataContainer, error) {
 	if c.skipOnSoftError {
 		return md, nil
 	}
 
-	if msg == "" {
-		return nil, errors.WithDetails(err, kv...)
+	return nil, errors.WrapIfWithDetails(err, msg, kv...)
+}
+
+// softErrOrDetails swallows err and returns the metadata gathered so far
+// when skipOnSoftError is set, otherwise fails with err itself - a
+// self-describing sentinel, e.g. ErrUnitNotFound - plus kv attached as
+// details.
+func (c *collector) softErrOrDetails(md metadatax.MetadataContainer, err error, kv ...any) (metadatax.MetadataContainer, error) {
+	if c.skipOnSoftError {
+		return md, nil
 	}
 
-	return nil, errors.WrapIfWithDetails(err, msg, kv...)
+	return nil, errors.WithDetails(err, kv...)
 }
 
 func (c *collector) base(properties map[string]any, md metadatax.MetadataContainer) {
@@ -222,16 +227,21 @@ func (c *collector) envs(properties map[string]any, md metadatax.MetadataContain
 	}
 }
 
-func stringProperty(properties map[string]any, name string) string {
-	if v, ok := properties[name].(string); ok {
-		return v
-	}
+// property centralizes the map-lookup-and-type-assert shape every
+// *Property function below needs, so adding or adjusting a property only
+// touches its own formatting logic, not the assertion itself.
+func property[T any](properties map[string]any, name string) (T, bool) {
+	v, ok := properties[name].(T)
+	return v, ok
+}
 
-	return ""
+func stringProperty(properties map[string]any, name string) string {
+	v, _ := property[string](properties, name)
+	return v
 }
 
 func uint32Property(properties map[string]any, name string) string {
-	v, ok := properties[name].(uint32)
+	v, ok := property[uint32](properties, name)
 	if !ok {
 		return ""
 	}
@@ -240,7 +250,7 @@ func uint32Property(properties map[string]any, name string) string {
 }
 
 func boolProperty(properties map[string]any, name string) string {
-	v, ok := properties[name].(bool)
+	v, ok := property[bool](properties, name)
 	if !ok {
 		return ""
 	}
@@ -254,7 +264,7 @@ func boolProperty(properties map[string]any, name string) string {
 // the raw mask is still useful as an identity component since it is stable
 // for a given unit's declared configuration.
 func capabilityBoundingSetProperty(properties map[string]any) string {
-	v, ok := properties["CapabilityBoundingSet"].(uint64)
+	v, ok := property[uint64](properties, "CapabilityBoundingSet")
 	if !ok {
 		return ""
 	}
@@ -288,7 +298,7 @@ func execStartCommand(properties map[string]any) string {
 }
 
 func invocationIDProperty(properties map[string]any) string {
-	v, ok := properties["InvocationID"].([]byte)
+	v, ok := property[[]byte](properties, "InvocationID")
 	if !ok || len(v) == 0 {
 		return ""
 	}
@@ -299,7 +309,7 @@ func invocationIDProperty(properties map[string]any) string {
 // timestampProperty formats a systemd timestamp property, which is expressed
 // as microseconds since the Unix epoch (0 meaning "never").
 func timestampProperty(properties map[string]any, name string) string {
-	v, ok := properties[name].(uint64)
+	v, ok := property[uint64](properties, name)
 	if !ok || v == 0 {
 		return ""
 	}
