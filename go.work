@@ -10,5 +10,6 @@ use (
 	./collectors/linuxos
 	./collectors/procfs
 	./collectors/sysfsdmi
+	./collectors/systemd
 	./collectors/node
 )
