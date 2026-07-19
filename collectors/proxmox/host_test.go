@@ -230,5 +230,5 @@ func TestCollectorNoPID(t *testing.T) {
 	collector := New()
 
 	_, err := collector.GetMetadata(context.Background())
-	assert.ErrorIs(t, err, metadatax.PIDNotFoundError)
+	assert.ErrorIs(t, err, metadatax.ErrPIDNotFound)
 }
