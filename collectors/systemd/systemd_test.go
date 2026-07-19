@@ -17,7 +17,7 @@ type unitNameGetter struct {
 	err      error
 }
 
-func (g *unitNameGetter) GetUnitNameForPID(pid int) (string, error) {
+func (g *unitNameGetter) GetUnitNameForPID(ctx context.Context, pid int) (string, error) {
 	return g.unitName, g.err
 }
 
@@ -158,6 +158,10 @@ func TestGetMetadataEnvNormalizesCaseAndMergesUnderOneKey(t *testing.T) {
 
 func TestGetMetadataNoSystemd(t *testing.T) {
 	t.Parallel()
+
+	if systemd.HasSystemd() {
+		t.Skip("this test machine has systemd; cannot exercise the no-systemd path")
+	}
 
 	collector := systemd.New(
 		systemd.WithUnitNameGetter(&unitNameGetter{unitName: "nginx.service"}),

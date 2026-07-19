@@ -34,12 +34,10 @@ type dbusUnitNameGetter struct{}
 // nested/delegated cgroups (docker.service's containers), login sessions,
 // etc. - since systemd resolves it internally rather than us re-deriving it
 // from cgroup path shape.
-func (dbusUnitNameGetter) GetUnitNameForPID(pid int) (string, error) {
+func (dbusUnitNameGetter) GetUnitNameForPID(ctx context.Context, pid int) (string, error) {
 	if pid < 0 {
 		return "", errors.New("invalid pid: must not be negative")
 	}
-
-	ctx := context.Background()
 
 	conn, err := systemddbus.NewSystemConnectionContext(ctx)
 	if err != nil {

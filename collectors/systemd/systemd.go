@@ -23,7 +23,7 @@ const (
 var ErrUnitNotFound = errors.Sentinel("could not find systemd unit for pid")
 
 type UnitNameGetter interface {
-	GetUnitNameForPID(pid int) (string, error)
+	GetUnitNameForPID(ctx context.Context, pid int) (string, error)
 }
 
 type UnitPropertiesGetter interface {
@@ -114,19 +114,20 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 		return nil, metadatax.ErrPIDNotFound
 	}
 
-	unitName, err := c.unitNameGetter.GetUnitNameForPID(int(pid))
+	unitName, err := c.unitNameGetter.GetUnitNameForPID(ctx, int(pid))
 	if err != nil {
-		// os.ErrNotExist here means /proc/<pid> vanished while reading its
-		// cgroup, i.e. the process itself exited - a meaningful, specific
-		// signal worth its own sentinel. GetUnitProperties below has no
-		// equivalent: a failure there is a D-Bus fault about the unit, not
-		// the process, so it doesn't get this same translation.
+		// os.ErrNotExist here means the unit-name getter confirmed the pid
+		// itself no longer exists (see dbusUnitNameGetter's use of
+		// process.PidExists) - a meaningful, specific signal worth its own
+		// sentinel. GetUnitProperties below has no equivalent: a failure
+		// there is a D-Bus fault about the unit, not the process, so it
+		// doesn't get this same translation.
 		if errors.Is(err, os.ErrNotExist) {
 			if c.skipOnSoftError {
 				return md, nil
 			}
 
-			return nil, process.ErrorProcessNotRunning
+			return nil, errors.WithDetails(process.ErrorProcessNotRunning, "pid", pid)
 		}
 
 		return c.softErrOrWrap(md, err, "could not get systemd unit for pid", "pid", pid)
