@@ -145,10 +145,10 @@ func TestGetMetadataReportedLabels(t *testing.T) {
 
 	labels := md.GetLabels()
 	assert.Equal(t, []string{"true"}, labels["github:reported:actions"])
-	assert.Equal(t, []string{"riptideslabs/daemon"}, labels["github:reported:repository"])
-	assert.Equal(t, []string{"build"}, labels["github:reported:workflow"])
-	assert.Equal(t, []string{"waynz0r"}, labels["github:reported:actor"])
-	assert.Equal(t, []string{"30012614543"}, labels["github:reported:run-id"])
+	assert.Equal(t, []string{"riptideslabs/daemon"}, labels["github:reported:repository:name"])
+	assert.Equal(t, []string{"build"}, labels["github:reported:workflow:name"])
+	assert.Equal(t, []string{"waynz0r"}, labels["github:reported:actor:name"])
+	assert.Equal(t, []string{"30012614543"}, labels["github:reported:run:id"])
 	assert.Equal(t, []string{"aa5c5dd6adc9b38638e8b7251716d0515b6df0c7"}, labels["github:reported:sha"])
 	assert.Equal(t, []string{"Linux"}, labels["github:reported:runner:os"])
 	assert.Equal(t, []string{"github-hosted"}, labels["github:reported:runner:environment"])
@@ -157,7 +157,7 @@ func TestGetMetadataReportedLabels(t *testing.T) {
 
 	// token validation skipped -> not verified, no verified subtree.
 	assert.Equal(t, []string{"false"}, labels["github:token-verified"])
-	_, hasVerified := labels["github:verified:run-id"]
+	_, hasVerified := labels["github:verified:run:id"]
 	assert.False(t, hasVerified)
 }
 
@@ -169,16 +169,16 @@ func TestGetMetadataVerified(t *testing.T) {
 
 	labels := md.GetLabels()
 	assert.Equal(t, []string{"true"}, labels["github:token-verified"])
-	assert.Equal(t, []string{"30012614543"}, labels["github:verified:run-id"])
-	assert.Equal(t, []string{"976787887"}, labels["github:verified:repository-id"])
-	assert.Equal(t, []string{"internal"}, labels["github:verified:repository-visibility"])
-	assert.Equal(t, []string{"e679fd3b-5ebe-5859-aeb4-7920aa158817"}, labels["github:verified:job-id"])
+	assert.Equal(t, []string{"30012614543"}, labels["github:verified:run:id"])
+	assert.Equal(t, []string{"976787887"}, labels["github:verified:repository:id"])
+	assert.Equal(t, []string{"internal"}, labels["github:verified:repository:visibility"])
+	assert.Equal(t, []string{"e679fd3b-5ebe-5859-aeb4-7920aa158817"}, labels["github:verified:job:id"])
 	assert.Equal(t, []string{"1"}, labels["github:verified:trust-tier"])
-	assert.Equal(t, []string{github.GitHubActionsIssuer}, labels["github:verified:token-issuer"])
+	assert.Equal(t, []string{github.GitHubActionsIssuer}, labels["github:verified:token:issuer"])
 	assert.ElementsMatch(t, []string{"Actions.Results:a:b", "Actions.Runner:a:b"}, labels["github:verified:scope"])
 
 	// reported subtree is still present alongside verified.
-	assert.Equal(t, []string{"riptideslabs/daemon"}, labels["github:reported:repository"])
+	assert.Equal(t, []string{"riptideslabs/daemon"}, labels["github:reported:repository:name"])
 }
 
 func TestGetMetadataTokenClaimMismatch(t *testing.T) {
@@ -192,7 +192,7 @@ func TestGetMetadataTokenClaimMismatch(t *testing.T) {
 
 	labels := md.GetLabels()
 	assert.Equal(t, []string{"false"}, labels["github:token-verified"])
-	_, hasVerified := labels["github:verified:run-id"]
+	_, hasVerified := labels["github:verified:run:id"]
 	assert.False(t, hasVerified)
 }
 
@@ -204,7 +204,7 @@ func TestGetMetadataVerifierError(t *testing.T) {
 
 	labels := md.GetLabels()
 	assert.Equal(t, []string{"false"}, labels["github:token-verified"])
-	_, hasVerified := labels["github:verified:run-id"]
+	_, hasVerified := labels["github:verified:run:id"]
 	assert.False(t, hasVerified)
 }
 
@@ -219,14 +219,14 @@ func TestGetMetadataIDTokenVerifiesHumanReadableIdentity(t *testing.T) {
 	labels := md.GetLabels()
 	assert.Equal(t, []string{"true"}, labels["github:token-verified"])
 	// Name-bearing fields the runtime token can't attest are now verified.
-	assert.Equal(t, []string{"riptideslabs/daemon"}, labels["github:verified:repository"])
-	assert.Equal(t, []string{"riptideslabs"}, labels["github:verified:repository-owner"])
-	assert.Equal(t, []string{"waynz0r"}, labels["github:verified:actor"])
-	assert.Equal(t, []string{"refs/heads/aa"}, labels["github:verified:ref"])
-	assert.Equal(t, []string{"build"}, labels["github:verified:workflow"])
+	assert.Equal(t, []string{"riptideslabs/daemon"}, labels["github:verified:repository:name"])
+	assert.Equal(t, []string{"riptideslabs"}, labels["github:verified:repository:owner:name"])
+	assert.Equal(t, []string{"waynz0r"}, labels["github:verified:actor:name"])
+	assert.Equal(t, []string{"refs/heads/aa"}, labels["github:verified:ref:path"])
+	assert.Equal(t, []string{"build"}, labels["github:verified:workflow:name"])
 	assert.Equal(t, []string{"repo:riptideslabs/daemon:ref:refs/heads/aa"}, labels["github:verified:subject"])
 	// Numeric core still present too.
-	assert.Equal(t, []string{"30012614543"}, labels["github:verified:run-id"])
+	assert.Equal(t, []string{"30012614543"}, labels["github:verified:run:id"])
 }
 
 func TestGetMetadataIDTokenIdentityMismatchFallsBackToRuntime(t *testing.T) {
@@ -244,11 +244,11 @@ func TestGetMetadataIDTokenIdentityMismatchFallsBackToRuntime(t *testing.T) {
 	labels := md.GetLabels()
 	// Runtime-token numeric verification still succeeds...
 	assert.Equal(t, []string{"true"}, labels["github:token-verified"])
-	assert.Equal(t, []string{"30012614543"}, labels["github:verified:run-id"])
+	assert.Equal(t, []string{"30012614543"}, labels["github:verified:run:id"])
 	// ...but the mismatched identity is NOT emitted as verified.
-	_, hasRepo := labels["github:verified:repository"]
+	_, hasRepo := labels["github:verified:repository:name"]
 	assert.False(t, hasRepo)
-	_, hasActor := labels["github:verified:actor"]
+	_, hasActor := labels["github:verified:actor:name"]
 	assert.False(t, hasActor)
 }
 
@@ -272,8 +272,8 @@ func TestGetMetadataIDTokenMalformedExtraFallsBackToRuntime(t *testing.T) {
 
 	labels := md.GetLabels()
 	assert.Equal(t, []string{"true"}, labels["github:token-verified"])
-	assert.Equal(t, []string{"30012614543"}, labels["github:verified:run-id"])
-	_, hasRepo := labels["github:verified:repository"]
+	assert.Equal(t, []string{"30012614543"}, labels["github:verified:run:id"])
+	_, hasRepo := labels["github:verified:repository:name"]
 	assert.False(t, hasRepo, "malformed oidc_extra must not yield verified identity")
 }
 
@@ -295,7 +295,7 @@ func TestGetMetadataCrossCheckFailsClosedOnMissingEnvAnchor(t *testing.T) {
 
 	labels := md.GetLabels()
 	assert.Equal(t, []string{"false"}, labels["github:token-verified"])
-	_, hasVerified := labels["github:verified:run-id"]
+	_, hasVerified := labels["github:verified:run:id"]
 	assert.False(t, hasVerified)
 }
 
@@ -310,7 +310,7 @@ func TestGetMetadataMissingToken(t *testing.T) {
 
 	labels := md.GetLabels()
 	assert.Equal(t, []string{"false"}, labels["github:token-verified"])
-	_, hasVerified := labels["github:verified:run-id"]
+	_, hasVerified := labels["github:verified:run:id"]
 	assert.False(t, hasVerified)
 }
 

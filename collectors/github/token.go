@@ -210,23 +210,31 @@ func crossCheck(claims *RuntimeTokenClaims, env map[string]string) bool {
 }
 
 func applyVerifiedClaims(vmd metadatax.MetadataContainer, claims *RuntimeTokenClaims) {
-	vmd.AddLabel("run-id", claims.RunID)
-	vmd.AddLabel("run-number", claims.RunNumber)
-	vmd.AddLabel("run-type", claims.RunType)
 	vmd.AddLabel("sha", claims.SHA)
-	vmd.AddLabel("repository-id", claims.RepositoryID)
-	vmd.AddLabel("repository-owner-id", claims.RepositoryOwnerID)
-	vmd.AddLabel("repository-visibility", claims.RepositoryVisibility)
-	vmd.AddLabel("job-id", claims.JobID)
-	vmd.AddLabel("runner-id", claims.RunnerID)
-	vmd.AddLabel("runner-type", claims.RunnerType)
 	vmd.AddLabel("orch-id", claims.OrchestrationID)
 	vmd.AddLabel("plan-id", claims.PlanID)
 	vmd.AddLabel("trust-tier", claims.TrustTier)
-	vmd.AddLabel("token-issuer", claims.Issuer)
 
+	runmd := vmd.Segment("run")
+	runmd.AddLabel("id", claims.RunID)
+	runmd.AddLabel("number", claims.RunNumber)
+	runmd.AddLabel("type", claims.RunType)
+
+	repomd := vmd.Segment("repository")
+	repomd.AddLabel("id", claims.RepositoryID)
+	repomd.AddLabel("visibility", claims.RepositoryVisibility)
+	repomd.Segment("owner").AddLabel("id", claims.RepositoryOwnerID)
+
+	vmd.Segment("job").AddLabel("id", claims.JobID)
+
+	runnermd := vmd.Segment("runner")
+	runnermd.AddLabel("id", claims.RunnerID)
+	runnermd.AddLabel("type", claims.RunnerType)
+
+	tokenmd := vmd.Segment("token")
+	tokenmd.AddLabel("issuer", claims.Issuer)
 	if claims.ExpiresAt > 0 {
-		vmd.AddLabel("token-expires-at", time.Unix(claims.ExpiresAt, 0).UTC().Format(time.RFC3339))
+		tokenmd.AddLabel("expires-at", time.Unix(claims.ExpiresAt, 0).UTC().Format(time.RFC3339))
 	}
 
 	for scope := range strings.FieldsSeq(claims.Scope) {
@@ -274,21 +282,32 @@ func crossCheckIdentity(id *IDTokenIdentity, env map[string]string) bool {
 // belong in the verified subtree.
 func applyVerifiedIdentity(vmd metadatax.MetadataContainer, id *IDTokenIdentity, subject string) {
 	vmd.AddLabel("subject", subject)
-	vmd.AddLabel("repository", id.Repository)
-	vmd.AddLabel("repository-owner", id.RepositoryOwner)
-	vmd.AddLabel("actor", id.Actor)
-	vmd.AddLabel("actor-id", id.ActorID)
-	vmd.AddLabel("ref", id.Ref)
-	vmd.AddLabel("ref-type", id.RefType)
-	vmd.AddLabel("ref-protected", id.RefProtected)
+	vmd.AddLabel("event-name", id.EventName)
 	vmd.AddLabel("base-ref", id.BaseRef)
 	vmd.AddLabel("head-ref", id.HeadRef)
-	vmd.AddLabel("workflow", id.Workflow)
-	vmd.AddLabel("workflow-ref", id.WorkflowRef)
-	vmd.AddLabel("workflow-sha", id.WorkflowSHA)
-	vmd.AddLabel("job-workflow-ref", id.JobWorkflowRef)
-	vmd.AddLabel("job-workflow-sha", id.JobWorkflowSHA)
-	vmd.AddLabel("event-name", id.EventName)
-	vmd.AddLabel("run-attempt", id.RunAttempt)
-	vmd.AddLabel("runner-environment", id.RunnerEnvironment)
+
+	repomd := vmd.Segment("repository")
+	repomd.AddLabel("name", id.Repository)
+	repomd.Segment("owner").AddLabel("name", id.RepositoryOwner)
+
+	actormd := vmd.Segment("actor")
+	actormd.AddLabel("name", id.Actor)
+	actormd.AddLabel("id", id.ActorID)
+
+	refmd := vmd.Segment("ref")
+	refmd.AddLabel("path", id.Ref)
+	refmd.AddLabel("type", id.RefType)
+	refmd.AddLabel("protected", id.RefProtected)
+
+	wfmd := vmd.Segment("workflow")
+	wfmd.AddLabel("name", id.Workflow)
+	wfmd.AddLabel("ref", id.WorkflowRef)
+	wfmd.AddLabel("sha", id.WorkflowSHA)
+
+	jobwfmd := vmd.Segment("job").Segment("workflow")
+	jobwfmd.AddLabel("ref", id.JobWorkflowRef)
+	jobwfmd.AddLabel("sha", id.JobWorkflowSHA)
+
+	vmd.Segment("run").AddLabel("attempt", id.RunAttempt)
+	vmd.Segment("runner").AddLabel("environment", id.RunnerEnvironment)
 }
