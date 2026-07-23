@@ -13,4 +13,5 @@ use (
 	./collectors/systemd
 	./collectors/node
 	./collectors/proxmox
+	./collectors/github
 )
