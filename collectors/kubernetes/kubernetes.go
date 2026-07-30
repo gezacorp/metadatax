@@ -10,6 +10,7 @@ import (
 
 	"emperror.dev/errors"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/cenkalti/backoff/v5"
 	"github.com/gezacorp/metadatax"
@@ -162,6 +163,7 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 		c.labels,
 		c.annotations,
 		c.images,
+		c.probes,
 	}
 
 	for _, f := range getters {
@@ -208,6 +210,74 @@ func (c *collector) container(podctx podContext, md metadatax.MetadataContainer)
 	cmd := md.Segment("container")
 	cmd.AddLabel("name", podctx.container.Name)
 	cmd.Segment("image").AddLabel("id", podctx.containerStatus.ImageID)
+}
+
+func (c *collector) probes(podctx podContext, md metadatax.MetadataContainer) {
+	pmd := md.Segment("container").Segment("probe")
+
+	probes := []struct {
+		kind  string
+		probe *corev1.Probe
+	}{
+		{"liveness", podctx.container.LivenessProbe},
+		{"readiness", podctx.container.ReadinessProbe},
+		{"startup", podctx.container.StartupProbe},
+	}
+
+	for _, p := range probes {
+		if p.probe == nil {
+			continue
+		}
+
+		c.probe(podctx.container, p.probe, pmd.Segment(p.kind))
+	}
+}
+
+func (c *collector) probe(container corev1.Container, probe *corev1.Probe, md metadatax.MetadataContainer) {
+	switch {
+	case probe.HTTPGet != nil:
+		md.AddLabel("type", "httpget")
+		md.AddLabel("path", probe.HTTPGet.Path)
+		md.AddLabel("host", probe.HTTPGet.Host)
+		scheme := strings.ToLower(string(probe.HTTPGet.Scheme))
+		if scheme == "" {
+			scheme = strings.ToLower(string(corev1.URISchemeHTTP))
+		}
+		md.AddLabel("scheme", scheme)
+		c.probePort(container, probe.HTTPGet.Port, md)
+	case probe.TCPSocket != nil:
+		md.AddLabel("type", "tcpsocket")
+		md.AddLabel("host", probe.TCPSocket.Host)
+		c.probePort(container, probe.TCPSocket.Port, md)
+	case probe.GRPC != nil:
+		md.AddLabel("type", "grpc")
+		md.AddLabel("port", strconv.Itoa(int(probe.GRPC.Port)))
+		if probe.GRPC.Service != nil {
+			md.AddLabel("service", *probe.GRPC.Service)
+		}
+	case probe.Exec != nil:
+		md.AddLabel("type", "exec")
+	}
+}
+
+// probePort emits the probe target port, resolving a named port through the container's
+// port declarations so that consumers always get a number when one is derivable.
+func (c *collector) probePort(container corev1.Container, port intstr.IntOrString, md metadatax.MetadataContainer) {
+	if port.Type == intstr.Int {
+		md.AddLabel("port", strconv.Itoa(int(port.IntValue())))
+
+		return
+	}
+
+	md.AddLabel("port-name", port.StrVal)
+
+	for _, p := range container.Ports {
+		if p.Name == port.StrVal {
+			md.AddLabel("port", strconv.Itoa(int(p.ContainerPort)))
+
+			return
+		}
+	}
 }
 
 func (c *collector) labels(podctx podContext, md metadatax.MetadataContainer) {
