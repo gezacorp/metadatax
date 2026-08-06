@@ -12,9 +12,8 @@ import (
 	"github.com/docker/cli/cli/config"
 	docker_ctx "github.com/docker/cli/cli/context/docker"
 	"github.com/docker/cli/cli/context/store"
-	"github.com/docker/cli/cli/flags"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/client"
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/client"
 
 	"github.com/gezacorp/metadatax"
 )
@@ -148,11 +147,12 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 	}
 
 	if c.containerInspector == nil {
-		var err error
-
-		if c.containerInspector, err = c.getDockerClient(); err != nil {
+		dockerClient, err := c.getDockerClient()
+		if err != nil {
 			return nil, errors.WrapIf(err, "could not get docker client")
 		}
+
+		c.containerInspector = &clientContainerInspector{client: dockerClient}
 	}
 
 	pid, found := metadatax.PIDFromContext(ctx)
@@ -245,7 +245,7 @@ func (c *collector) network(containerJSON container.InspectResponse, md metadata
 	nmd.AddLabel("mode", string(containerJSON.HostConfig.NetworkMode))
 	nmd.AddLabel("hostname", containerJSON.Config.Hostname)
 	for port := range containerJSON.HostConfig.PortBindings {
-		md.AddLabel("port-binding", string(port))
+		md.AddLabel("port-binding", port.String())
 	}
 }
 
@@ -263,15 +263,20 @@ func (c *collector) getDockerClient() (*client.Client, error) {
 	return client.NewClientWithOpts(opts...)
 }
 
-func GetCurrentContextHost() (string, error) {
-	storeCfg := command.DefaultContextStoreConfig()
-	contextStore := &command.ContextStoreWithDefault{
-		Store: store.New(config.ContextStoreDir(), storeCfg),
-		Resolver: func() (*command.DefaultContext, error) {
-			return command.ResolveDefaultContext(&flags.ClientOptions{}, storeCfg)
-		},
+type clientContainerInspector struct {
+	client *client.Client
+}
+
+func (c *clientContainerInspector) ContainerInspect(ctx context.Context, containerID string) (container.InspectResponse, error) {
+	result, err := c.client.ContainerInspect(ctx, containerID, client.ContainerInspectOptions{})
+	if err != nil {
+		return container.InspectResponse{}, err
 	}
 
+	return result.Container, nil
+}
+
+func GetCurrentContextHost() (string, error) {
 	getContextName := func() string {
 		cfg := config.LoadDefaultConfigFile(io.Discard)
 
@@ -286,12 +291,22 @@ func GetCurrentContextHost() (string, error) {
 		return command.DefaultContextName
 	}
 
+	currentContextName := getContextName()
+	if currentContextName == command.DefaultContextName {
+		if host := os.Getenv(client.EnvOverrideHost); host != "" {
+			return host, nil
+		}
+
+		return client.DefaultDockerHost, nil
+	}
+
+	contextStore := store.New(config.ContextStoreDir(), command.DefaultContextStoreConfig())
+
 	contexts, err := contextStore.List()
 	if err != nil {
 		return "", err
 	}
 
-	currentContextName := getContextName()
 	for _, ctx := range contexts {
 		if ctx.Name != currentContextName {
 			continue
