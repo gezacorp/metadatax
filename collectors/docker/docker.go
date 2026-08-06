@@ -83,6 +83,13 @@ func WithSkipOnSoftError() CollectorOption {
 	}
 }
 
+func WithForceHasDocker() CollectorOption {
+	return func(c *collector) {
+		hasDocker := true
+		c.hasDocker = &hasDocker
+	}
+}
+
 func New(opts ...CollectorOption) metadatax.Collector {
 	c := &collector{}
 
@@ -254,13 +261,12 @@ func (c *collector) getDockerClient() (*client.Client, error) {
 	if c.socketPath != "" {
 		opts = append(opts, client.WithHost(c.socketPath))
 	}
-	opts = append(opts, client.WithAPIVersionNegotiation())
 
 	if c.dockerClientOpts != nil {
 		opts = append(opts, c.dockerClientOpts...)
 	}
 
-	return client.NewClientWithOpts(opts...)
+	return client.New(opts...)
 }
 
 type clientContainerInspector struct {

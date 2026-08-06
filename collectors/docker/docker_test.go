@@ -46,6 +46,7 @@ func TestGetMetadata(t *testing.T) {
 	collector := docker.New(
 		docker.WithContainerInspector(&containerInspector{}),
 		docker.WithContainerIDGetter(&containerIDGetter{}),
+		docker.WithForceHasDocker(),
 	)
 
 	expectedLabels := map[string][]string{
