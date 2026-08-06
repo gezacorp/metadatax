@@ -7,7 +7,7 @@ on:
   pull_request:
 
 env:
-  GO_VERSION: "1.21.4"
+  GO_VERSION: "1.26.5"
   GOFLAGS: -mod=readonly
 
 jobs:

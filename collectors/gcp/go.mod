@@ -1,6 +1,6 @@
 module github.com/gezacorp/metadatax/collectors/gcp
 
-go 1.21.4
+go 1.26.0
 
 require (
 	emperror.dev/errors v0.8.1
