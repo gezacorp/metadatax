@@ -1,4 +1,4 @@
-go 1.25.0
+go 1.26.0
 
 use (
 	.
@@ -6,12 +6,12 @@ use (
 	./collectors/docker
 	./collectors/ec2
 	./collectors/gcp
+	./collectors/github
 	./collectors/kubernetes
 	./collectors/linuxos
+	./collectors/node
 	./collectors/procfs
+	./collectors/proxmox
 	./collectors/sysfsdmi
 	./collectors/systemd
-	./collectors/node
-	./collectors/proxmox
-	./collectors/github
 )

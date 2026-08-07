@@ -1,6 +1,6 @@
 module github.com/gezacorp/metadatax/collectors/sysfsdmi
 
-go 1.21.4
+go 1.26.0
 
 require (
 	github.com/gezacorp/metadatax v0.0.0-20250619152456-c2ae8300820c

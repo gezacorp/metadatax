@@ -7,7 +7,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/docker/docker/api/types/container"
+	"github.com/moby/moby/api/types/container"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/gezacorp/metadatax"
@@ -46,6 +46,7 @@ func TestGetMetadata(t *testing.T) {
 	collector := docker.New(
 		docker.WithContainerInspector(&containerInspector{}),
 		docker.WithContainerIDGetter(&containerIDGetter{}),
+		docker.WithForceHasDocker(),
 	)
 
 	expectedLabels := map[string][]string{
