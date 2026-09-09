@@ -307,3 +307,165 @@ func TestGetMetadataForExecProbe(t *testing.T) {
 		assert.NotContains(t, labels, "kubernetes:container:probe:liveness:"+key)
 	}
 }
+
+const (
+	staleCachePodUID         = "c3a1f2b4-9e21-4a6b-8c3d-1a2b3c4d5e6f"
+	staleCacheOldContainerID = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	staleCacheNewContainerID = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+)
+
+// staleCachePodLister simulates a pod list that is one generation behind reality: its first
+// response (the one that gets cached) still carries the previous container instance's ID, even
+// though the container count already matches what the pod spec expects. Only a forced refresh
+// (skipCache=true, i.e. a retry) returns the pod list with the current container ID.
+type staleCachePodLister struct {
+	calls int
+}
+
+func (l *staleCachePodLister) GetPods(ctx context.Context) ([]corev1.Pod, error) {
+	l.calls++
+
+	containerID := staleCacheOldContainerID
+	if l.calls > 1 {
+		containerID = staleCacheNewContainerID
+	}
+
+	return []corev1.Pod{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "app",
+				Namespace: "default",
+				UID:       types.UID(staleCachePodUID),
+			},
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Name:  "app",
+						Image: "app:latest",
+					},
+				},
+			},
+			Status: corev1.PodStatus{
+				ContainerStatuses: []corev1.ContainerStatus{
+					{
+						Name:        "app",
+						ContainerID: "containerd://" + containerID,
+					},
+				},
+			},
+		},
+	}, nil
+}
+
+type staleCachePodResolver struct{}
+
+func (r *staleCachePodResolver) GetPodAndContainerID(pid int32) (string, string, error) {
+	return staleCachePodUID, staleCacheNewContainerID, nil
+}
+
+// TestGetMetadataRetriesWhenCachedPodHasStaleContainerID reproduces a race where the collector's
+// cached pod list still reflects the previous container instance (e.g. right after a restart):
+// the container count matches what the pod spec expects, but the container ID the process
+// resolver reports isn't among the cached statuses. getPodContext must not report "found" in
+// that case - doing so skips the retry-with-fresh-pod-list path entirely, and the container
+// segment is silently dropped from the metadata (AddLabel drops empty values, so a zero-value
+// container never even shows up as an empty field - the whole "kubernetes:container:*" segment
+// just vanishes).
+func TestGetMetadataRetriesWhenCachedPodHasStaleContainerID(t *testing.T) {
+	t.Parallel()
+
+	collector := kubernetes.New(
+		kubernetes.WithPodLister(&staleCachePodLister{}),
+		kubernetes.WithPodResolver(&staleCachePodResolver{}),
+	)
+
+	md, err := collector.GetMetadata(metadatax.ContextWithPID(context.Background(), 1))
+	assert.NoError(t, err)
+
+	labels := md.GetLabels()
+	assert.Equal(t, []string{"app"}, labels["kubernetes:pod:name"], "pod segment should be populated from the cached pod")
+	assert.Equal(t, []string{"app"}, labels["kubernetes:container:name"], "container segment must be populated by retrying with a fresh pod list, not silently dropped")
+}
+
+const (
+	gradualStartupPodUID    = "9f2e1a3c-4b5d-4e6f-8a7b-1c2d3e4f5a6b"
+	gradualStartupAppID     = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+	gradualStartupSidecarID = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+)
+
+// gradualStartupPodLister simulates a pod that is still coming up: "app" already has a real
+// container ID, but "sidecar" is still pulling its image, so its ContainerStatus exists (kubelet
+// creates a Waiting placeholder for every declared container up front) but with an empty
+// ContainerID - it doesn't get a real ID until the second (retried) fetch.
+type gradualStartupPodLister struct {
+	calls int
+}
+
+func (l *gradualStartupPodLister) GetPods(ctx context.Context) ([]corev1.Pod, error) {
+	l.calls++
+
+	sidecarStatus := corev1.ContainerStatus{
+		Name:  "sidecar",
+		State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "ContainerCreating"}},
+	}
+	if l.calls > 1 {
+		sidecarStatus.ContainerID = "containerd://" + gradualStartupSidecarID
+		sidecarStatus.State = corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}
+	}
+
+	return []corev1.Pod{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "multi",
+				Namespace: "default",
+				UID:       types.UID(gradualStartupPodUID),
+			},
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Name: "app", Image: "app:latest"},
+					{Name: "sidecar", Image: "sidecar:latest"},
+				},
+			},
+			Status: corev1.PodStatus{
+				ContainerStatuses: []corev1.ContainerStatus{
+					{
+						Name:        "app",
+						ContainerID: "containerd://" + gradualStartupAppID,
+						State:       corev1.ContainerState{Running: &corev1.ContainerStateRunning{}},
+					},
+					sidecarStatus,
+				},
+			},
+		},
+	}, nil
+}
+
+type gradualStartupSidecarPodResolver struct{}
+
+func (r *gradualStartupSidecarPodResolver) GetPodAndContainerID(pid int32) (string, string, error) {
+	return gradualStartupPodUID, gradualStartupSidecarID, nil
+}
+
+// TestGetMetadataForNotYetReadyContainerInMultiContainerPod guards against a regression in the
+// getPodContext fix: when a pod is still starting up and only some of its containers have been
+// assigned a real container ID yet, resolving metadata for a container that isn't ready yet must
+// retry against a fresh pod list rather than falsely matching (or falsely failing). This is a
+// different situation from TestGetMetadataRetriesWhenCachedPodHasStaleContainerID - here the
+// container count genuinely does not match yet (expected == len(statuses) is false on both the
+// old and the fixed code), so it was never actually affected by that fix, but it's worth locking
+// in explicitly since it's the scenario the fix was checked against.
+func TestGetMetadataForNotYetReadyContainerInMultiContainerPod(t *testing.T) {
+	t.Parallel()
+
+	collector := kubernetes.New(
+		kubernetes.WithPodLister(&gradualStartupPodLister{}),
+		kubernetes.WithPodResolver(&gradualStartupSidecarPodResolver{}),
+	)
+
+	md, err := collector.GetMetadata(metadatax.ContextWithPID(context.Background(), 1))
+	assert.NoError(t, err)
+
+	labels := md.GetLabels()
+	assert.Equal(t, []string{"multi"}, labels["kubernetes:pod:name"])
+	assert.Equal(t, []string{"sidecar"}, labels["kubernetes:container:name"], "must resolve the sidecar once it gets a real container ID on retry, not match/skip it early")
+}
