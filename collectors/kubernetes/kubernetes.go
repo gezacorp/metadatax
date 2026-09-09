@@ -399,7 +399,6 @@ func (c *collector) getPodContext(podID, containerID string, pods []corev1.Pod) 
 		return podContext, false
 	}
 
-	expected := len(podContext.pod.Spec.Containers) + len(podContext.pod.Spec.InitContainers) + len(podContext.pod.Spec.EphemeralContainers)
 	statuses := map[string]corev1.ContainerStatus{}
 
 	for _, csc := range [][]corev1.ContainerStatus{
@@ -431,5 +430,8 @@ func (c *collector) getPodContext(podID, containerID string, pods []corev1.Pod) 
 		return podContext, found
 	}
 
-	return podContext, expected == len(statuses)
+	// The resolved container ID doesn't match any known status for this pod. Report not-found
+	// so the caller retries against a fresh pod list instead of returning a podContext whose
+	// container/containerStatus were never populated.
+	return podContext, false
 }
