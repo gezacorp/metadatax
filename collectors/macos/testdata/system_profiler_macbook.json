@@ -1,0 +1,33 @@
+{
+  "SPHardwareDataType" : [
+    {
+      "_name" : "hardware_overview",
+      "activation_lock_status" : "activation_lock_enabled",
+      "boot_rom_version" : "20457.1.29",
+      "chip_type" : "Apple M3",
+      "machine_model" : "Mac15,12",
+      "machine_name" : "MacBook Air",
+      "model_number" : "Z1G80019MMG/A",
+      "number_processors" : "proc 8:0:4:4",
+      "os_loader_version" : "20457.1.29",
+      "physical_memory" : "16 GB",
+      "platform_UUID" : "00000000-1111-2222-3333-444444444444",
+      "provisioning_UDID" : "00008122-0000AAAA0000BBBB",
+      "serial_number" : "C02TEST0MBA"
+    }
+  ],
+  "SPSoftwareDataType" : [
+    {
+      "_name" : "os_overview",
+      "boot_mode" : "normal_boot",
+      "boot_volume" : "Macintosh HD",
+      "kernel_version" : "Darwin 27.0.0",
+      "local_host_name" : "Test MacBook Air",
+      "os_version" : "macOS 27.0 (26A428)",
+      "secure_vm" : "secure_vm_enabled",
+      "system_integrity" : "integrity_enabled",
+      "uptime" : "up 11:16:53:8",
+      "user_name" : "Test User (test)"
+    }
+  ]
+}
