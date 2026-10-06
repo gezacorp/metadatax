@@ -9,6 +9,7 @@ use (
 	./collectors/github
 	./collectors/kubernetes
 	./collectors/linuxos
+	./collectors/macos
 	./collectors/node
 	./collectors/procfs
 	./collectors/proxmox
