@@ -1,0 +1,23 @@
+{
+  "SPHardwareDataType" : [
+    {
+      "_name" : "hardware_overview",
+      "boot_rom_version" : "1916.40.8.0.0 (iBridge: 20.16.420.0.0,0)",
+      "cpu_type" : "8-Core Intel Core i7",
+      "machine_model" : "iMac20,1",
+      "machine_name" : "iMac",
+      "model_number" : "MXWV2LL/A",
+      "platform_UUID" : "55555555-6666-7777-8888-999999999999",
+      "provisioning_UDID" : "55555555-6666-7777-8888-999999999999",
+      "serial_number" : "C02TESTIMAC"
+    }
+  ],
+  "SPSoftwareDataType" : [
+    {
+      "_name" : "os_overview",
+      "kernel_version" : "Darwin 24.6.0",
+      "local_host_name" : "Test iMac",
+      "os_version" : "macOS 15.6 (24G84)"
+    }
+  ]
+}

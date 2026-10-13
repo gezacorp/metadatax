@@ -1,0 +1,3 @@
+Enrolled via DEP: No
+MDM enrollment: Yes (User Approved)
+MDM server: https://mdm.example.com/mdm/server/?op=commands&c=secret
