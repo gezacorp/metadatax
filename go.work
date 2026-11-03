@@ -14,6 +14,7 @@ use (
 	./collectors/node
 	./collectors/procfs
 	./collectors/proxmox
+	./collectors/script
 	./collectors/sysfsdmi
 	./collectors/systemd
 )
