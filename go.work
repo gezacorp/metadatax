@@ -12,6 +12,7 @@ use (
 	./collectors/macos
 	./collectors/macosprocess
 	./collectors/node
+	./collectors/packages
 	./collectors/procfs
 	./collectors/proxmox
 	./collectors/script
