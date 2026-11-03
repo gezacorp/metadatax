@@ -10,6 +10,7 @@ use (
 	./collectors/kubernetes
 	./collectors/linuxos
 	./collectors/macos
+	./collectors/macosprocess
 	./collectors/node
 	./collectors/procfs
 	./collectors/proxmox
