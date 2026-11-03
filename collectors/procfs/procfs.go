@@ -17,7 +17,21 @@ const (
 	name = "process"
 
 	basePath = "/proc/cmdline"
+
+	// The arguments that tell what a process runs come first; the rest are
+	// its own options, as long as a JVM's or an Electron app's can be.
+	maxArgs       = 8
+	maxCmdlineLen = 1024
 )
+
+// truncate cuts s to at most n bytes without splitting a character.
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+
+	return strings.ToValidUTF8(s[:n], "")
+}
 
 type collector struct {
 	hasProcfs       bool
@@ -42,6 +56,26 @@ type ProcessInfo interface {
 	ExeWithContext(ctx context.Context) (string, error)
 	ConnectionsWithContext(ctx context.Context) ([]net.ConnectionStat, error)
 }
+
+// A ProcessInfo may also have these; the collector reports what each reads
+// when it does. The default one has all of them.
+type (
+	argsReader interface {
+		CmdlineSliceWithContext(ctx context.Context) ([]string, error)
+	}
+	ppidReader interface {
+		PpidWithContext(ctx context.Context) (int32, error)
+	}
+	sessionIDReader interface {
+		SessionIDWithContext(ctx context.Context) (int32, error)
+	}
+	cgroupReader interface {
+		CgroupWithContext(ctx context.Context) (string, error)
+	}
+	loginUIDReader interface {
+		LoginUIDWithContext(ctx context.Context) (uint32, error)
+	}
+)
 
 type CollectorOption func(*collector)
 
@@ -84,7 +118,12 @@ func New(opts ...CollectorOption) metadatax.Collector {
 
 	if c.processInfoFunc == nil {
 		c.processInfoFunc = func(ctx context.Context, pid int32) (ProcessInfo, error) {
-			return process.NewProcessWithContext(ctx, pid)
+			p, err := process.NewProcessWithContext(ctx, pid)
+			if err != nil {
+				return nil, err
+			}
+
+			return &procInfo{Process: p}, nil
 		}
 	}
 
@@ -147,16 +186,50 @@ func (c *collector) base(ctx context.Context, processInfo ProcessInfo, md metada
 	}
 
 	if parts, err := processInfo.CmdlineWithContext(ctx); err == nil {
-		md.AddLabel("cmdline", parts)
+		md.AddLabel("cmdline", truncate(parts, maxCmdlineLen))
+	}
+
+	if p, ok := processInfo.(argsReader); ok {
+		if args, err := p.CmdlineSliceWithContext(ctx); err == nil {
+			argmd := md.Segment("arg")
+			for i, a := range args[:min(len(args), maxArgs)] {
+				argmd.AddLabel(strconv.Itoa(i), a)
+			}
+		}
+	}
+
+	if p, ok := processInfo.(ppidReader); ok {
+		if ppid, err := p.PpidWithContext(ctx); err == nil {
+			md.AddLabel("ppid", strconv.Itoa(int(ppid)))
+		}
+	}
+
+	if p, ok := processInfo.(sessionIDReader); ok {
+		if sid, err := p.SessionIDWithContext(ctx); err == nil {
+			md.AddLabel("sid", strconv.Itoa(int(sid)))
+		}
+	}
+
+	if p, ok := processInfo.(cgroupReader); ok {
+		if cgroup, err := p.CgroupWithContext(ctx); err == nil && cgroup != "" {
+			addCgroup(md, cgroup)
+		}
 	}
 }
 
 func (c *collector) uids(ctx context.Context, processInfo ProcessInfo, md metadatax.MetadataContainer) {
+	uidmd := md.Segment("uid")
+
 	if uids, err := processInfo.UidsWithContext(ctx); err == nil && len(uids) >= 2 {
-		uidmd := md.Segment("uid")
 		uidmd.AddLabel("real", strconv.Itoa(int(uids[0])))
 		uidmd.AddLabel("effective", strconv.Itoa(int(uids[1])))
 		uidmd.AddLabel("", strconv.Itoa(int(uids[1])))
+	}
+
+	if p, ok := processInfo.(loginUIDReader); ok {
+		if login, err := p.LoginUIDWithContext(ctx); err == nil && login != noLoginUID {
+			uidmd.AddLabel("login", strconv.FormatUint(uint64(login), 10))
+		}
 	}
 }
 

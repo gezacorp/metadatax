@@ -25,6 +25,11 @@ type processInfo struct {
 	agids       []uint32
 	envs        []string
 	connections []net.ConnectionStat
+	args        []string
+	ppid        int32
+	loginUID    uint32
+	cgroup      string
+	sid         int32
 }
 
 func (i *processInfo) NameWithContext(ctx context.Context) (string, error) {
@@ -33,6 +38,26 @@ func (i *processInfo) NameWithContext(ctx context.Context) (string, error) {
 
 func (i *processInfo) CmdlineWithContext(ctx context.Context) (string, error) {
 	return i.cmdLine, nil
+}
+
+func (i *processInfo) CmdlineSliceWithContext(ctx context.Context) ([]string, error) {
+	return i.args, nil
+}
+
+func (i *processInfo) PpidWithContext(ctx context.Context) (int32, error) {
+	return i.ppid, nil
+}
+
+func (i *processInfo) LoginUIDWithContext(ctx context.Context) (uint32, error) {
+	return i.loginUID, nil
+}
+
+func (i *processInfo) CgroupWithContext(ctx context.Context) (string, error) {
+	return i.cgroup, nil
+}
+
+func (i *processInfo) SessionIDWithContext(ctx context.Context) (int32, error) {
+	return i.sid, nil
 }
 
 func (i *processInfo) UidsWithContext(ctx context.Context) ([]uint32, error) {
@@ -70,15 +95,20 @@ func TestGetMetadata(t *testing.T) {
 	assert.Nil(t, err)
 
 	processInfo := &processInfo{
-		exe:     file.Name(),
-		hash:    digest.SHA256.FromString(fileContent).String(),
-		cmdLine: "./test-command",
-		uid:     501,
-		gid:     502,
-		name:    "test",
-		pid:     1001,
-		agids:   []uint32{101, 102, 103, 104},
-		envs:    []string{"a=b", "c=d"},
+		exe:      file.Name(),
+		hash:     digest.SHA256.FromString(fileContent).String(),
+		cmdLine:  "./test-command --flag",
+		args:     []string{"./test-command", "--flag"},
+		ppid:     1000,
+		sid:      990,
+		loginUID: 501,
+		cgroup:   "/user.slice/user-501.slice/session-5.scope",
+		uid:      501,
+		gid:      502,
+		name:     "test",
+		pid:      1001,
+		agids:    []uint32{101, 102, 103, 104},
+		envs:     []string{"a=b", "c=d"},
 		connections: []net.ConnectionStat{
 			{
 				Laddr:  net.Addr{IP: "127.0.0.1", Port: 8080},
@@ -91,6 +121,15 @@ func TestGetMetadata(t *testing.T) {
 		"process:binary:path":     {processInfo.exe},
 		"process:binary:hash":     {processInfo.hash},
 		"process:cmdline":         {processInfo.cmdLine},
+		"process:arg:0":           {"./test-command"},
+		"process:arg:1":           {"--flag"},
+		"process:ppid":            {"1000"},
+		"process:sid":             {"990"},
+		"process:cgroup":          {"/user.slice/user-501.slice/session-5.scope"},
+		"process:cgroup:unit":     {"session-5.scope"},
+		"process:cgroup:manager":  {"system"},
+		"process:cgroup:kind":     {"session"},
+		"process:uid:login":       {"501"},
 		"process:gid":             {strconv.Itoa(int(processInfo.gid))},
 		"process:gid:additional":  {strconv.Itoa(int(processInfo.agids[0])), strconv.Itoa(int(processInfo.agids[1])), strconv.Itoa(int(processInfo.agids[2])), strconv.Itoa(int(processInfo.agids[3]))},
 		"process:gid:effective":   {strconv.Itoa(int(processInfo.gid))},
