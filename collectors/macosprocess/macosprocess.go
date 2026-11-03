@@ -1,5 +1,5 @@
-// Package macosprocess collects the metadata of a macOS process, with the
-// label names the procfs collector uses for what both platforms have.
+// Package macosprocess collects process metadata on macOS, under the procfs
+// collector's label names where both platforms have the same data.
 package macosprocess
 
 import (
@@ -18,7 +18,6 @@ import (
 
 const name = "process"
 
-// ErrProcessNotFound is returned for a PID with no process behind it.
 var ErrProcessNotFound = errors.WrapIf(os.ErrNotExist, "process not found")
 
 const (
@@ -29,13 +28,10 @@ const (
 
 	noAuditID = 0xffffffff
 
-	// The arguments that tell what a process runs come first; the rest are
-	// its own options, as long as an Electron helper's can be.
 	maxArgs       = 8
 	maxCmdlineLen = 1024
 )
 
-// truncate cuts s to at most n bytes without splitting a character.
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s
@@ -44,24 +40,19 @@ func truncate(s string, n int) string {
 	return strings.ToValidUTF8(s[:n], "")
 }
 
-// ProcessInfo is what the collector reads about a process.
 type ProcessInfo struct {
-	// Name is the kernel's short command name.
 	Name string
-	// Path is the executable; empty when it is no longer on disk.
-	Path string
-	// ExecPath is the path the process was started with.
+	// Path is empty when the executable is no longer on disk. ExecPath is
+	// the path it was started with.
+	Path     string
 	ExecPath string
 	Args     []string
 	PPID     int32
 
 	RUID, EUID, RGID, EGID uint32
-	// Audit is false when the audit token could not be read.
-	Audit bool
-	// AUID is the audit user ID, the user who logged in; noAuditID when
-	// the process has none.
-	AUID    uint32
-	Session int32
+	Audit                  bool
+	AUID                   uint32
+	Session                int32
 
 	Signature Signature
 	Bundle    Bundle
@@ -69,8 +60,6 @@ type ProcessInfo struct {
 	Responsible Responsible
 }
 
-// Responsible is the process launchd attributes the process to, the app it
-// runs on behalf of.
 type Responsible struct {
 	PID       int32
 	Path      string
@@ -78,7 +67,8 @@ type Responsible struct {
 	Bundle    Bundle
 }
 
-// Signature is the code signature of the running code as the kernel has it.
+// Signature is the code signature of the running process as the kernel
+// reports it.
 type Signature struct {
 	Identifier string
 	Team       string
@@ -86,7 +76,6 @@ type Signature struct {
 	Status     uint32
 }
 
-// Bundle is the innermost bundle the executable is in.
 type Bundle struct {
 	Path    string
 	ID      string
@@ -244,8 +233,6 @@ func addLabel(md metadatax.MetadataContainer, name, value string) {
 	}
 }
 
-// bundlePath is the innermost bundle exe sits in as its main executable,
-// the directory holding Contents/MacOS, or empty.
 func bundlePath(exe string) string {
 	const marker = "/Contents/MacOS/"
 
@@ -257,8 +244,8 @@ func bundlePath(exe string) string {
 	return exe[:i]
 }
 
-// parseProcArgs reads a KERN_PROCARGS2 buffer: the argument count, the
-// exec path, padding, then the arguments, each NUL terminated.
+// parseProcArgs returns the exec path and arguments of a KERN_PROCARGS2
+// buffer: argc, the exec path, NUL padding, the NUL-terminated arguments.
 func parseProcArgs(buf []byte) (string, []string) {
 	if len(buf) < 4 {
 		return "", nil

@@ -1,6 +1,5 @@
-// Package script collects what an interpreter runs: the script, module or
-// jar, and the package that owns it, so that processes of one interpreter
-// running different programs can be told apart.
+// Package script collects what an interpreter process runs, a script,
+// module, jar, class or task, and the package that owns it.
 package script
 
 import (
@@ -42,8 +41,6 @@ func CollectorWithProcessInfoFunc(fn ProcessInfoFunc) CollectorOption {
 	}
 }
 
-// CollectorWithRootFunc sets where a process's files are seen from, its
-// root directory as this process can open it.
 func CollectorWithRootFunc(fn func(pid int32) string) CollectorOption {
 	return func(c *collector) {
 		c.rootFunc = fn
@@ -125,8 +122,7 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 	addLabel(md, "class", target.Class)
 	addLabel(md, "task", target.Task)
 
-	// A task is the project's, so its package is found from the working
-	// directory, as the interpreter finds the task.
+	// A task's package is the package.json in the working directory.
 	file := target.Path
 
 	switch {
@@ -174,9 +170,8 @@ func addLabel(md metadatax.MetadataContainer, name, value string) {
 	}
 }
 
-// processRoot is a process's root directory on Linux, so that files of a
-// process in another mount namespace, such as a container, are read from
-// its view; elsewhere the host's.
+// processRoot returns the directory through which pid's own root filesystem
+// is read, or "" outside Linux.
 func processRoot(pid int32) string {
 	if runtime.GOOS != "linux" {
 		return ""

@@ -12,17 +12,10 @@ import (
 
 const podTemplateHashLabel = "pod-template-hash"
 
-// Workload is the kind and name of what runs pod, read from the pod alone:
-// the Deployment of a ReplicaSet named <deployment>-<pod-template-hash>,
-// the CronJob of a Job named like one of its recent runs, the pod's
-// controller otherwise, the name a static pod has without its node's, or
-// the pod itself when nothing owns it.
 func Workload(pod *corev1.Pod) (string, string) {
 	return WorkloadAt(pod, time.Now())
 }
 
-// WorkloadAt is Workload with now as the time a CronJob's run is compared
-// with.
 func WorkloadAt(pod *corev1.Pod, now time.Time) (string, string) {
 	owner, ok := controller(pod.GetOwnerReferences())
 	if !ok {
@@ -49,19 +42,13 @@ func WorkloadAt(pod *corev1.Pod, now time.Time) (string, string) {
 	return kind, owner.Name
 }
 
-// cronJobRun is the name a CronJob gives the Job of a run: its own name and
-// the scheduled time in minutes since the Unix epoch. The pod's owner is
-// the Job; that the CronJob owns the Job only the API can tell, so the name
-// stands in for it.
+// cronJobRun matches the Job names a CronJob creates:
+// <cronjob>-<scheduled time in minutes since the epoch>.
 var cronJobRun = regexp.MustCompile(`^(.+)-(\d{8})$`)
 
-// cronJobRunAge is how far from now a run's scheduled time may be. It keeps
-// out Jobs named with a date or a Unix time in seconds, which read as
-// minutes decades away.
+// cronJobRunAge is the most a run's scheduled time may differ from now.
 const cronJobRunAge = 366 * 24 * time.Hour
 
-// cronJob is the CronJob whose run job is, when its name is one of a run
-// scheduled within cronJobRunAge of now.
 func cronJob(job string, now time.Time) (string, bool) {
 	m := cronJobRun.FindStringSubmatch(job)
 	if m == nil {

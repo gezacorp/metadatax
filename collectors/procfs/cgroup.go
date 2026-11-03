@@ -8,7 +8,6 @@ import (
 	"github.com/gezacorp/metadatax"
 )
 
-// Kinds of the innermost systemd unit a process runs in.
 const (
 	KindService   = "service"
 	KindApp       = "app"
@@ -33,9 +32,8 @@ var (
 	appServiceRand = regexp.MustCompile(`@[^@]*\.service$`)
 )
 
-// CgroupPath is the path in a /proc/<pid>/cgroup file that places the
-// process: the unified hierarchy's, else the named systemd hierarchy's on
-// cgroup v1.
+// CgroupPath returns the cgroup v2 path in /proc/<pid>/cgroup content, else
+// the cgroup v1 name=systemd path.
 func CgroupPath(content string) string {
 	var v1 string
 
@@ -56,32 +54,21 @@ func CgroupPath(content string) string {
 	return v1
 }
 
-// CgroupUnit is the systemd unit deepest in a cgroup path, under the system
-// or a user's manager, and what its name says about what runs in it. The
-// system manager reports a unit under a user's manager as the
-// user@<uid>.service it is in; the path still names it.
 type CgroupUnit struct {
-	Unit string
-	// Manager is "user" for a unit under a user@<uid>.service, else
-	// "system".
+	Unit    string
 	Manager string
 	Kind    string
-	// Name is the unit without what changes per instance: the template
-	// instance of a service, the application ID of an app, <snap>.<app> of
-	// a snap.
+	// Name is the unit name without its per-instance parts.
 	Name     string
 	Launcher string
 	Snap     string
 	SnapApp  string
-	// ContainerUnit is the innermost container the path passes through,
-	// also when the container runs a systemd of its own and the innermost
-	// unit is one of its services; ContainerRuntime is what runs it.
+	// ContainerUnit is the container's unit, also when Unit is a service of
+	// a systemd inside the container.
 	ContainerUnit    string
 	ContainerRuntime string
 }
 
-// InnermostUnit reads the innermost unit of a cgroup path; ok is false when
-// the path has neither a unit nor a container in it.
 func InnermostUnit(path string) (CgroupUnit, bool) {
 	var (
 		u    CgroupUnit
@@ -123,9 +110,6 @@ func InnermostUnit(path string) (CgroupUnit, bool) {
 	return u, true
 }
 
-// containerRuntime is what runs the container a cgroup path element is, or
-// empty: a docker, containerd, CRI-O or podman scope, an LXD or Incus
-// payload, a systemd-nspawn machine.
 func containerRuntime(elem string) string {
 	switch {
 	case containerUnit.MatchString(elem):
@@ -171,11 +155,9 @@ func classify(u *CgroupUnit) {
 	}
 }
 
-// appID reads the launcher and the application ID of a unit named the way
-// desktop environments name the units they start apps in:
+// appID returns the launcher and application ID of a unit named
 // app[-<launcher>]-<ApplicationID>-<RANDOM>.scope or
-// app[-<launcher>]-<ApplicationID>[@<RANDOM>].service, dashes inside the
-// parts escaped as \x2d.
+// app[-<launcher>]-<ApplicationID>[@<RANDOM>].service.
 func appID(unit string) (string, string) {
 	s := strings.TrimPrefix(unit, "app-")
 
@@ -204,8 +186,7 @@ func foldTemplate(unit string) string {
 	return unit[:at+1] + ".service"
 }
 
-// unescape decodes systemd's \xNN escapes. They are bytes, so a character
-// beyond ASCII is several of them, decoded together into its UTF-8.
+// unescape decodes systemd's \xNN byte escapes into UTF-8.
 func unescape(s string) string {
 	if !strings.Contains(s, `\x`) {
 		return s

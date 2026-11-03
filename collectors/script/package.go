@@ -10,22 +10,17 @@ import (
 	"strings"
 )
 
-// Package is the package a script belongs to.
 type Package struct {
 	Manager string
 	Name    string
 	Version string
-	// Path is the package's directory as the process sees it.
-	Path string
+	Path    string
 }
 
 const maxManifestSize = 1 << 20
 
 var sitePackages = regexp.MustCompile(`/(site|dist)-packages/`)
 
-// findPackage finds the package file belongs to, reading files under root
-// and adding to d what the answer depends on; argv0 is the interpreter as
-// the process was started with it.
 func findPackage(root, interpreter, file, argv0 string, d deps) (Package, bool) {
 	switch interpreter {
 	case "node", "bun", "deno":
@@ -41,8 +36,7 @@ func findPackage(root, interpreter, file, argv0 string, d deps) (Package, bool) 
 	return Package{}, false
 }
 
-// npmPackage is the nearest package.json above file that names a package;
-// those without a name only set options for the files under them.
+// npmPackage finds the nearest package.json above file that has a name.
 func npmPackage(root, file string, d deps) (Package, bool) {
 	for dir := filepath.Dir(file); ; dir = filepath.Dir(dir) {
 		manifest := filepath.Join(dir, "package.json")
@@ -67,10 +61,8 @@ func npmPackage(root, file string, d deps) (Package, bool) {
 	}
 }
 
-// pythonPackage is the distribution installed in a site-packages directory
-// whose dist-info RECORD lists file itself. Matching the file, not its
-// top-level directory, keeps namespace packages apart: google-cloud-storage
-// and google-api-core both install under google/.
+// pythonPackage finds the distribution in file's site-packages whose RECORD
+// lists file itself.
 func pythonPackage(root, file string, d deps) (Package, bool) {
 	loc := sitePackages.FindStringIndex(file)
 	if loc == nil {
@@ -102,11 +94,8 @@ func pythonPackage(root, file string, d deps) (Package, bool) {
 	return Package{}, false
 }
 
-// pythonConsoleScript is the distribution that declares file as one of its
-// console scripts: the launcher pip, pipx or uv writes into an
-// environment's bin directory, which imports the package's code from that
-// environment's site-packages. The environment is the one the launcher is
-// in, or the one of the interpreter it was started with, <env>/bin/python.
+// pythonConsoleScript finds the distribution with a console or GUI script
+// named like file, in the site-packages of file's env, then of argv0's.
 func pythonConsoleScript(root, file, argv0 string, d deps) (Package, bool) {
 	envs := []string{filepath.Dir(filepath.Dir(file))}
 
@@ -148,8 +137,6 @@ func pythonConsoleScript(root, file, argv0 string, d deps) (Package, bool) {
 	return Package{}, false
 }
 
-// entryPointsHave reports whether an entry_points.txt declares script as a
-// console or GUI script.
 func entryPointsHave(path, script string) bool {
 	f, err := os.Open(path)
 	if err != nil {
@@ -177,8 +164,6 @@ func entryPointsHave(path, script string) bool {
 	return false
 }
 
-// recordHas reports whether a dist-info RECORD lists rel, a path relative
-// to site-packages.
 func recordHas(record, rel string) bool {
 	f, err := os.Open(record)
 	if err != nil {
@@ -224,7 +209,6 @@ func distMetadata(path string) (string, string) {
 	return name, version
 }
 
-// readSmall reads a file of at most maxManifestSize bytes.
 func readSmall(path string) ([]byte, error) {
 	f, err := os.Open(path)
 	if err != nil {

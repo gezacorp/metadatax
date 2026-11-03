@@ -18,13 +18,10 @@ const (
 
 	basePath = "/proc/cmdline"
 
-	// The arguments that tell what a process runs come first; the rest are
-	// its own options, as long as a JVM's or an Electron app's can be.
 	maxArgs       = 8
 	maxCmdlineLen = 1024
 )
 
-// truncate cuts s to at most n bytes without splitting a character.
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s
@@ -57,8 +54,7 @@ type ProcessInfo interface {
 	ConnectionsWithContext(ctx context.Context) ([]net.ConnectionStat, error)
 }
 
-// A ProcessInfo may also have these; the collector reports what each reads
-// when it does. The default one has all of them.
+// Optional ProcessInfo methods, used when the ProcessInfo implements them.
 type (
 	argsReader interface {
 		CmdlineSliceWithContext(ctx context.Context) ([]string, error)

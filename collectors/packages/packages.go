@@ -1,6 +1,3 @@
-// Package packages collects the package that installed a process's
-// executable: the dpkg, apk, pacman or rpm package on Linux, the Homebrew
-// formula, or the snap.
 package packages
 
 import (
@@ -24,14 +21,11 @@ const (
 	maxCachedLookups = 1024
 )
 
-// Package is what installed a file.
 type Package struct {
 	Manager string
 	Name    string
 	Version string
-	// Arch is the architecture a dpkg package is installed for, when its
-	// name is qualified with one.
-	Arch string
+	Arch    string
 }
 
 type ProcessInfo interface {
@@ -40,14 +34,12 @@ type ProcessInfo interface {
 
 type ProcessInfoFunc func(ctx context.Context, pid int32) (ProcessInfo, error)
 
-// Finder finds the package that installed path, reading files under root.
 type Finder interface {
 	Find(ctx context.Context, root, path string) (Package, bool)
 }
 
-// A Finder may also say when its database under root last changed, any
-// string that differs after an install, upgrade or removal; the collector
-// then drops what it cached from the earlier state.
+// stamper is implemented by a Finder whose Stamp changes with every install,
+// upgrade or removal. The collector's cached answers expire when it changes.
 type stamper interface {
 	Stamp(root string) string
 }
@@ -82,16 +74,12 @@ func CollectorWithProcessInfoFunc(fn ProcessInfoFunc) CollectorOption {
 	}
 }
 
-// CollectorWithRootFunc sets where a process's files are seen from, its
-// root directory as this process can open it.
 func CollectorWithRootFunc(fn func(pid int32) string) CollectorOption {
 	return func(c *collector) {
 		c.rootFunc = fn
 	}
 }
 
-// CollectorWithFinders sets the finders asked in turn, instead of Homebrew,
-// snap, dpkg, apk, pacman and rpm.
 func CollectorWithFinders(finders ...Finder) CollectorOption {
 	return func(c *collector) {
 		c.finders = finders
@@ -181,9 +169,6 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 	return md, nil
 }
 
-// find asks the finders in turn, caching the answer per package database,
-// its state and path: processes of one container share a database, so a
-// lookup is done once for all of them until a package changes.
 func (c *collector) find(ctx context.Context, root, path string) (Package, bool) {
 	key := cacheKey{db: dbIdentity(root), stamp: c.stamp(root), path: path}
 
@@ -226,9 +211,8 @@ func (c *collector) stamp(root string) string {
 	return b.String()
 }
 
-// dbIdentity names the package databases seen from root by the device and
-// inode of root itself, so that two PIDs' roots in one container compare
-// equal while two containers do not.
+// dbIdentity returns the device and inode of root, one value for all PIDs of
+// a container, or root itself when they cannot be read.
 func dbIdentity(root string) string {
 	if root == "" {
 		return ""
@@ -242,9 +226,8 @@ func dbIdentity(root string) string {
 	return strconv.FormatUint(dev, 10) + ":" + strconv.FormatUint(ino, 10)
 }
 
-// processRoot is a process's root directory on Linux, so that files of a
-// process in another mount namespace, such as a container, are read from
-// its view; elsewhere the host's.
+// processRoot returns the directory through which pid's own root filesystem
+// is read, or "" outside Linux.
 func processRoot(pid int32) string {
 	if runtime.GOOS != "linux" {
 		return ""

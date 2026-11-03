@@ -7,42 +7,27 @@ import (
 	"strings"
 )
 
-// Target is what an interpreter's command line runs.
 type Target struct {
 	Interpreter string
-	// Path is the script file, as given on the command line.
-	Path string
-	// Module is a module or package run by name: python -m, java -m,
-	// bun x.
-	Module string
-	Jar    string
-	// Class is the main class java runs from its class path.
-	Class string
-	// Inline is set for code given on the command line itself.
-	Inline bool
-	// Task is a script of the project's package.json or deno.json run by
-	// name: bun run dev, deno task start.
-	Task string
+	Path        string
+	Module      string
+	Jar         string
+	Class       string
+	Inline      bool
+	Task        string
 }
 
 type syntax struct {
-	// valued are the options that take the next argument as their value.
-	valued []string
-	// inline are the options whose value is the code to run.
-	inline []string
-	// module is the option whose value is a module to run.
-	module string
-	// subcommands are skipped before the script, such as "run".
+	valued      []string
+	inline      []string
+	module      string
 	subcommands []string
-	// taskCommand is the subcommand whose argument is always a task.
 	taskCommand string
-	// bareTasks is set for interpreters taking a name with no directory
-	// and no extension as a task, not a file.
+	// bareTasks takes a name with no directory and no extension as a task.
 	bareTasks bool
-	// builtins are the commands that run no script of the user's.
-	builtins []string
-	// shortClusters is set for interpreters taking -abc as -a -b -c, the
-	// last of which may take a value given as the rest of the argument.
+	builtins  []string
+	// shortClusters reads -abc as -a -b -c, the last taking the rest as its
+	// value.
 	shortClusters bool
 }
 
@@ -101,8 +86,7 @@ var (
 	rubyName   = regexp.MustCompile(`^ruby(\d+(\.\d+)*)?$`)
 )
 
-// interpreter is the interpreter a binary name is, or empty. Case is
-// ignored: macOS framework builds run as Python.app/Contents/MacOS/Python.
+// interpreter maps a binary name, in any case, to its interpreter, or "".
 func interpreter(base string) string {
 	base = strings.ToLower(base)
 
@@ -124,8 +108,6 @@ func interpreter(base string) string {
 	return ""
 }
 
-// Parse reads what the command line args of the process running exe runs;
-// ok is false when the process is not an interpreter.
 func Parse(exe string, args []string) (Target, bool) {
 	var argv0 string
 
@@ -133,8 +115,7 @@ func Parse(exe string, args []string) (Target, bool) {
 		argv0 = interpreter(filepath.Base(args[0]))
 	}
 
-	// bunx is a link to bun, which the exe resolves; only argv[0] tells the
-	// two apart.
+	// bunx is a link to bun, so only argv[0] names it.
 	in := argv0
 	if in != "bunx" {
 		in = interpreter(filepath.Base(exe))
@@ -223,17 +204,12 @@ func Parse(exe string, args []string) (Target, bool) {
 	return t, true
 }
 
-// isTaskName reports whether a names a task rather than a file: no
-// directory and no extension, such as dev or start.
 func isTaskName(a string) bool {
 	return !strings.ContainsRune(a, '/') && filepath.Ext(a) == ""
 }
 
-// cluster reads a cluster of short options such as -uc, -Bm or -Ilib the
-// way getopt does: an option that takes a value takes the rest of the
-// argument, or the next one when nothing is left. It returns the arguments
-// after the cluster, and whether the cluster ended the options with inline
-// code or a module.
+// cluster reads -uc, -Bm or -Ilib the way getopt does: an option that takes
+// a value takes the rest of the argument, else the next one.
 func cluster(a string, rest []string, s syntax, t *Target) ([]string, bool) {
 	if strings.HasPrefix(a, "--") || len(a) < 2 {
 		return rest, false

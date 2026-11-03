@@ -18,7 +18,6 @@ var (
 	snapPath = regexp.MustCompile(`^/snap/([^/]+)/([^/]+)/`)
 )
 
-// Homebrew reads the formula and version from a path in a Homebrew Cellar.
 type Homebrew struct{}
 
 func (Homebrew) Find(_ context.Context, _, path string) (Package, bool) {
@@ -30,8 +29,6 @@ func (Homebrew) Find(_ context.Context, _, path string) (Package, bool) {
 	return Package{Manager: "brew", Name: m[1], Version: m[2]}, true
 }
 
-// Snap reads the snap a path in a mounted snap belongs to, and its version
-// from the snap's metadata.
 type Snap struct{}
 
 func (Snap) Find(_ context.Context, root, path string) (Package, bool) {
@@ -60,8 +57,6 @@ func (Snap) Find(_ context.Context, root, path string) (Package, bool) {
 	return pkg, true
 }
 
-// modTimes is when the newest of paths under root was modified, empty when
-// none exists.
 func modTimes(root string, paths ...string) string {
 	var newest int64
 
@@ -78,9 +73,6 @@ func modTimes(root string, paths ...string) string {
 	return strconv.FormatInt(newest, 10)
 }
 
-// NewDpkg finds the dpkg package whose file list,
-// /var/lib/dpkg/info/<package>[:<arch>].list, has the path. Its stamp is
-// dpkg's status file, which dpkg rewrites on every change of a package.
 func NewDpkg() Finder {
 	return newDB(dpkgWalk, func(root string) string {
 		return modTimes(root, "/var/lib/dpkg/status")
@@ -122,9 +114,8 @@ func dpkgWalk(root string, match func([]byte) bool, yield func(path string, pkg 
 	}
 }
 
-// dpkgVersions reads the installed packages' versions from dpkg's status
-// file, keyed <name>:<arch> and, for file lists not qualified with an
-// architecture, <name>:.
+// dpkgVersions returns the versions in a dpkg status file by <name>:<arch>,
+// and by <name>: for the first architecture of each name.
 func dpkgVersions(status string) map[string]string {
 	versions := map[string]string{}
 
@@ -172,9 +163,6 @@ func dpkgVersions(status string) map[string]string {
 	return versions
 }
 
-// NewApk finds the Alpine package that installed a path, in apk's database
-// of installed packages: one block per package, its files as F: directory
-// lines each followed by the R: file lines in it.
 func NewApk() Finder {
 	return newDB(apkWalk, func(root string) string {
 		return modTimes(root, "/lib/apk/db/installed")
@@ -232,11 +220,6 @@ func apkWalk(root string, match func([]byte) bool, yield func(path string, pkg P
 	}
 }
 
-// NewPacman finds the Arch Linux package that installed a path: each
-// installed package has a directory in pacman's local database with a files
-// list, paths relative to /, and a desc of %KEY% sections. Its stamp is the
-// database directory, where an install, upgrade or removal adds or removes
-// a package's directory.
 func NewPacman() Finder {
 	return newDB(pacmanWalk, func(root string) string {
 		return modTimes(root, "/var/lib/pacman/local")
@@ -320,17 +303,14 @@ func pacmanDesc(path string) map[string]string {
 	return desc
 }
 
-// CommandRunner runs a command and returns its standard output.
 type CommandRunner func(ctx context.Context, name string, args ...string) ([]byte, error)
 
-// RPM asks rpm which package owns the path, in the database under root.
 type RPM struct {
 	run CommandRunner
 }
 
 const rpmTimeout = 5 * time.Second
 
-// NewRPM asks rpm with run, or by running the rpm binary when run is nil.
 func NewRPM(run CommandRunner) RPM {
 	if run == nil {
 		run = func(ctx context.Context, name string, args ...string) ([]byte, error) {
@@ -344,10 +324,8 @@ func NewRPM(run CommandRunner) RPM {
 	return RPM{run: run}
 }
 
-// Stamp is when the rpm database changed, in whichever of its formats is
-// there: sqlite, whose writes land in its WAL first, Berkeley DB or ndb.
-// The directories are left out: readers of the sqlite database, rpm -qf
-// among them, create and remove side files there.
+// Stamp is the newest modification time of the rpm database files, sqlite
+// with its WAL, Berkeley DB or ndb, in either database location.
 func (RPM) Stamp(root string) string {
 	var paths []string
 

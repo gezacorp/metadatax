@@ -8,10 +8,8 @@ import (
 
 const maxLinks = 40
 
-// resolveIn resolves the symlinks in path the way the process whose root
-// directory is root sees them: an absolute link target starts over at the
-// process's root, not this host's. A path that cannot be read stays as it
-// is from there on.
+// resolveIn resolves the symlinks of path within root, absolute link targets
+// included.
 func resolveIn(root, path string) string {
 	parts := strings.Split(filepath.Clean(path), "/")
 	resolved := "/"

@@ -39,7 +39,6 @@ static int mxp_audit(pid_t pid, uid_t *auid, int *asid)
 	return 0;
 }
 
-// mxp_csblob reads a csops string blob, the identity or the team ID.
 static int mxp_csblob(pid_t pid, unsigned int op, char *out, size_t size)
 {
 	struct {
@@ -64,9 +63,8 @@ static void mxp_cfstring(CFTypeRef v, char *out, size_t size)
 		CFStringGetCString((CFStringRef)v, out, size, kCFStringEncodingUTF8);
 }
 
-// mxp_plist reads a bundle's identity from its Info.plist, XML or binary.
-// Parsing the file directly, not through CFBundle, which keeps bundles and
-// their Info.plist cached for the life of the process.
+// mxp_plist reads the bundle ID, name and version from Info.plist data, XML
+// or binary.
 static int mxp_plist(const UInt8 *bytes, CFIndex len, char *id, char *name, char *version, size_t size)
 {
 	CFDataRef data = CFDataCreate(NULL, bytes, len);
@@ -188,12 +186,8 @@ func bundleOf(exe string) Bundle {
 	return Bundle{}
 }
 
-// maxCachedBundles bounds the bundles kept; a Mac runs a few hundred apps
-// and helpers at most.
 const maxCachedBundles = 256
 
-// bundles keeps each bundle's identity until its Info.plist changes, which
-// an app update does.
 var bundles = &bundleCache{entries: map[string]*bundleEntry{}}
 
 type bundleCache struct {
@@ -243,7 +237,7 @@ func (c *bundleCache) get(path string) Bundle {
 	return b
 }
 
-// evict drops the bundle used longest ago; call with mu held.
+// evict removes the least recently used entry. The caller holds mu.
 func (c *bundleCache) evict() {
 	var (
 		oldest string

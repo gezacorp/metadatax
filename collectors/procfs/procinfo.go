@@ -10,11 +10,9 @@ import (
 	"github.com/shirou/gopsutil/v4/process"
 )
 
-// noLoginUID is the login uid of a process no login started, such as a
-// service or a container.
+// noLoginUID is the loginuid of a process no login started.
 const noLoginUID = 4294967295
 
-// procInfo adds what gopsutil does not read to its process.
 type procInfo struct {
 	*process.Process
 }
@@ -53,10 +51,8 @@ func (p *procInfo) SessionIDWithContext(context.Context) (int32, error) {
 	return sid, nil
 }
 
-// StatSessionID reads the session ID, the sixth field, from the content of
-// a /proc/<pid>/stat file. The command name in the second field can hold
-// spaces and parentheses, so the fields after it are counted from its last
-// closing parenthesis.
+// StatSessionID reads the session ID from /proc/<pid>/stat content,
+// counting fields from the last ")" of the command name.
 func StatSessionID(stat string) (int32, bool) {
 	i := strings.LastIndexByte(stat, ')')
 	if i < 0 {

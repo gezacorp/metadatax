@@ -8,21 +8,16 @@ import (
 	"sync"
 )
 
-// maxIndexes bounds how many databases' indexes are kept: the host's and
-// those of the containers seen most recently.
 const maxIndexes = 16
 
-// usualBinDirs are where packages install the programs people run.
 var usualBinDirs = []string{"/bin", "/sbin", "/usr/bin", "/usr/sbin", "/usr/local/bin", "/usr/local/sbin", "/usr/games"}
 
-// walkFunc yields the paths a package database lists that match, with their
-// package, until yield returns false. Matching sees the raw line, so that
-// the many paths that do not match cost no string.
+// walkFunc calls yield with each path in the database at root that match
+// accepts, and its package.
 type walkFunc func(root string, match func(path []byte) bool, yield func(path string, pkg Package) bool)
 
-// db finds packages in a database read through walk. The paths in the
-// usual program directories are kept in memory per database, until its
-// stamp changes; a path elsewhere is looked up by walking the database.
+// db looks up paths in usualBinDirs in an index per root, rebuilt when the
+// stamp changes, and walks the database for other paths.
 type db struct {
 	walk  walkFunc
 	stamp func(root string) string
@@ -80,8 +75,6 @@ func (d *db) Find(_ context.Context, root, path string) (Package, bool) {
 	return found, ok
 }
 
-// index is the database's programs in the usual directories, read anew
-// when its stamp changed since.
 func (d *db) index(root string) map[string]Package {
 	key, stamp := dbIdentity(root), d.stamp(root)
 
@@ -113,7 +106,7 @@ func (d *db) index(root string) map[string]Package {
 	return paths
 }
 
-// evict drops the index used longest ago; call with mu held.
+// evict removes the least recently used index. The caller holds mu.
 func (d *db) evict() {
 	var (
 		oldest string
@@ -133,8 +126,6 @@ func inUsualBinDir(path string) bool {
 	return inUsualBinDirBytes([]byte(path))
 }
 
-// inUsualBinDirBytes reports whether path is a file right in one of the
-// usual program directories, without making a string of it.
 func inUsualBinDirBytes(path []byte) bool {
 	i := bytes.LastIndexByte(path, '/')
 	if i <= 0 || i == len(path)-1 {
@@ -150,9 +141,8 @@ func inUsualBinDirBytes(path []byte) bool {
 	return false
 }
 
-// mergedUsrAliases is path and its other name on a system where /bin, /sbin
-// and /lib are links into /usr: packages built before the merge list the
-// short one.
+// mergedUsrAliases returns path with its spelling on the other side of the
+// /usr merge, e.g. /usr/bin/x and /bin/x.
 func mergedUsrAliases(path string) []string {
 	aliases := []string{path}
 

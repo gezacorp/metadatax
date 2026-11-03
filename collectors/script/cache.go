@@ -9,10 +9,8 @@ import (
 
 const maxCachedPackages = 1024
 
-// deps are the files and directories an answer was read from, relative to
-// the process's root, with their modification times; -1 for one that did
-// not exist. A directory's time changes when an entry is added to or
-// removed from it, such as a package.json or a dist-info.
+// deps maps the files and directories an answer was read from, relative to
+// the process's root, to their modification times.
 type deps map[string]int64
 
 func (d deps) add(root, path string) {
@@ -40,8 +38,6 @@ func modTime(path string) int64 {
 	return fi.ModTime().UnixNano()
 }
 
-// packageCache keeps the package found for a script, answers of none
-// included, while what the answer was read from is unchanged.
 type packageCache struct {
 	max int
 
@@ -100,7 +96,7 @@ func (c *packageCache) find(root, interpreter, file, argv0 string) (Package, boo
 	return pkg, found
 }
 
-// evict drops the entry used longest ago; call with mu held.
+// evict removes the least recently used entry. The caller holds mu.
 func (c *packageCache) evict() {
 	var (
 		oldest packageKey
@@ -117,9 +113,8 @@ func (c *packageCache) evict() {
 	delete(c.entries, oldest)
 }
 
-// dbIdentity names what a process sees from root by the device and inode
-// of root itself, so that two PIDs' roots in one container compare equal
-// while two containers do not.
+// dbIdentity returns the device and inode of root, one value for all PIDs of
+// a container, or root itself when they cannot be read.
 func dbIdentity(root string) string {
 	if root == "" {
 		return ""
