@@ -203,6 +203,11 @@ func (c *collector) pod(podctx podContext, md metadatax.MetadataContainer) {
 			AddLabel("name", owner.Name)
 	}
 
+	kind, name := Workload(&pod)
+	pmd.Segment("workload").
+		AddLabel("kind", kind).
+		AddLabel("name", name)
+
 	md.Segment("node").AddLabel("name", pod.Spec.NodeName)
 }
 
