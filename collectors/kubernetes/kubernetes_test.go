@@ -69,6 +69,8 @@ func TestGetMetadata(t *testing.T) {
 		"kubernetes:pod:owner:kind":                         {"replicaset"},
 		"kubernetes:pod:owner:kind-with-version":            {"apps/v1/replicaset"},
 		"kubernetes:pod:serviceaccount":                     {"metrics-server"},
+		"kubernetes:pod:workload:kind":                      {"deployment"},
+		"kubernetes:pod:workload:name":                      {"metrics-server"},
 	}
 
 	collector := kubernetes.New(
@@ -117,6 +119,8 @@ func TestGetMetadataForInitContainer(t *testing.T) {
 		"kubernetes:pod:owner:kind":                         {"replicaset"},
 		"kubernetes:pod:owner:kind-with-version":            {"apps/v1/replicaset"},
 		"kubernetes:pod:serviceaccount":                     {"metrics-server"},
+		"kubernetes:pod:workload:kind":                      {"deployment"},
+		"kubernetes:pod:workload:name":                      {"metrics-server"},
 	}
 
 	collector := kubernetes.New(
@@ -270,6 +274,8 @@ func TestGetMetadataForProbeTypes(t *testing.T) {
 		"kubernetes:pod:init-image:count":               {"0"},
 		"kubernetes:pod:name":                           {"probes"},
 		"kubernetes:pod:namespace":                      {"default"},
+		"kubernetes:pod:workload:kind":                  {"pod"},
+		"kubernetes:pod:workload:name":                  {"probes"},
 	}
 
 	collector := kubernetes.New(

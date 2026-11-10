@@ -10,9 +10,12 @@ use (
 	./collectors/kubernetes
 	./collectors/linuxos
 	./collectors/macos
+	./collectors/macosprocess
 	./collectors/node
+	./collectors/packages
 	./collectors/procfs
 	./collectors/proxmox
+	./collectors/script
 	./collectors/sysfsdmi
 	./collectors/systemd
 )
