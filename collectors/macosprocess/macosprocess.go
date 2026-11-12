@@ -40,21 +40,32 @@ func truncate(s string, n int) string {
 	return strings.ToValidUTF8(s[:n], "")
 }
 
-// argsWithin returns at most maxArgs leading args whose space-joined line
-// fits in maxLen bytes, the last one cut to fit.
+// argsWithin returns at most maxArgs leading non-empty args, as valid
+// UTF-8, whose space-joined line fits in maxLen bytes, the last one cut to
+// fit.
 func argsWithin(args []string, maxArgs, maxLen int) []string {
 	var within []string
 
-	for i, a := range args {
-		if i > 0 {
+	for _, a := range args {
+		a = strings.ToValidUTF8(a, "")
+		if a == "" {
+			continue
+		}
+
+		if len(within) > 0 {
 			maxLen--
 		}
 
-		if i == maxArgs || maxLen <= 0 {
+		if len(within) == maxArgs || maxLen <= 0 {
 			break
 		}
 
-		within = append(within, truncate(a, maxLen))
+		cut := truncate(a, maxLen)
+		if cut == "" {
+			break
+		}
+
+		within = append(within, cut)
 		maxLen -= len(a)
 	}
 

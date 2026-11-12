@@ -220,6 +220,16 @@ func TestCollector_LongCommandLine(t *testing.T) {
 	assert.Equal(t, strings.Join(covered, " "), cmdline)
 }
 
+func TestCollector_InvalidUTF8InArguments(t *testing.T) {
+	t.Parallel()
+
+	labels := collect(t, macosprocess.ProcessInfo{Args: []string{"tool", "b\xffb", "\xff"}})
+
+	assert.Equal(t, []string{"tool bb"}, labels["process:cmdline"])
+	assert.Equal(t, []string{"bb"}, labels["process:arg:1"])
+	assert.NotContains(t, labels, "process:arg:2")
+}
+
 func TestCollector_CommandLineLimits(t *testing.T) {
 	t.Parallel()
 
@@ -233,6 +243,15 @@ func TestCollector_CommandLineLimits(t *testing.T) {
 	assert.Equal(t, []string{"tool --password corr"}, labels["process:cmdline"])
 	assert.Equal(t, []string{"corr"}, labels["process:arg:2"])
 	assert.NotContains(t, labels, "process:arg:3")
+
+	labels = collect(t, macosprocess.ProcessInfo{Args: []string{"aaa", "é"}}, macosprocess.CollectorWithMaxCmdlineLen(5))
+	assert.Equal(t, []string{"aaa"}, labels["process:cmdline"])
+	assert.NotContains(t, labels, "process:arg:1")
+
+	labels = collect(t, macosprocess.ProcessInfo{Args: []string{"aaa", "", "bbb"}})
+	assert.Equal(t, []string{"aaa bbb"}, labels["process:cmdline"])
+	assert.Equal(t, []string{"bbb"}, labels["process:arg:1"])
+	assert.NotContains(t, labels, "process:arg:2")
 }
 
 func TestCollector_ArgumentsKeepTheirSpaces(t *testing.T) {
