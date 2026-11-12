@@ -17,7 +17,6 @@ import (
 type processInfo struct {
 	exe         string
 	hash        string
-	cmdLine     string
 	uid         uint32
 	gid         uint32
 	name        string
@@ -34,10 +33,6 @@ type processInfo struct {
 
 func (i *processInfo) NameWithContext(ctx context.Context) (string, error) {
 	return i.name, nil
-}
-
-func (i *processInfo) CmdlineWithContext(ctx context.Context) (string, error) {
-	return i.cmdLine, nil
 }
 
 func (i *processInfo) CmdlineSliceWithContext(ctx context.Context) ([]string, error) {
@@ -97,7 +92,6 @@ func TestGetMetadata(t *testing.T) {
 	processInfo := &processInfo{
 		exe:      file.Name(),
 		hash:     digest.SHA256.FromString(fileContent).String(),
-		cmdLine:  "./test-command --flag",
 		args:     []string{"./test-command", "--flag"},
 		ppid:     1000,
 		sid:      990,
@@ -120,7 +114,7 @@ func TestGetMetadata(t *testing.T) {
 	expected := map[string][]string{
 		"process:binary:path":     {processInfo.exe},
 		"process:binary:hash":     {processInfo.hash},
-		"process:cmdline":         {processInfo.cmdLine},
+		"process:cmdline":         {"./test-command --flag"},
 		"process:arg:0":           {"./test-command"},
 		"process:arg:1":           {"--flag"},
 		"process:ppid":            {"1000"},

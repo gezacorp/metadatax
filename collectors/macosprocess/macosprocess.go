@@ -28,8 +28,8 @@ const (
 
 	noAuditID = 0xffffffff
 
-	maxArgs       = 8
-	maxCmdlineLen = 1024
+	defaultMaxArgs       = 32
+	defaultMaxCmdlineLen = 1024
 )
 
 func truncate(s string, n int) string {
@@ -38,6 +38,38 @@ func truncate(s string, n int) string {
 	}
 
 	return strings.ToValidUTF8(s[:n], "")
+}
+
+// argsWithin returns at most maxArgs leading non-empty args, as valid
+// UTF-8, whose space-joined line fits in maxLen bytes, the last one cut to
+// fit.
+func argsWithin(args []string, maxArgs, maxLen int) []string {
+	var within []string
+
+	for _, a := range args {
+		a = strings.ToValidUTF8(a, "")
+		if a == "" {
+			continue
+		}
+
+		if len(within) > 0 {
+			maxLen--
+		}
+
+		if len(within) == maxArgs || maxLen <= 0 {
+			break
+		}
+
+		cut := truncate(a, maxLen)
+		if cut == "" {
+			break
+		}
+
+		within = append(within, cut)
+		maxLen -= len(a)
+	}
+
+	return within
 }
 
 type ProcessInfo struct {
@@ -89,9 +121,31 @@ type collector struct {
 	processInfoFunc     ProcessInfoFunc
 	mdContainerInitFunc func() metadatax.MetadataContainer
 	skipOnSoftError     bool
+	maxArgs             int
+	maxCmdlineLen       int
 }
 
 type CollectorOption func(*collector)
+
+// CollectorWithMaxArgs sets how many arguments are kept; n <= 0 keeps the
+// default.
+func CollectorWithMaxArgs(n int) CollectorOption {
+	return func(c *collector) {
+		if n > 0 {
+			c.maxArgs = n
+		}
+	}
+}
+
+// CollectorWithMaxCmdlineLen sets how many bytes of the command line are
+// kept; n <= 0 keeps the default.
+func CollectorWithMaxCmdlineLen(n int) CollectorOption {
+	return func(c *collector) {
+		if n > 0 {
+			c.maxCmdlineLen = n
+		}
+	}
+}
 
 func CollectorWithProcessInfoFunc(fn ProcessInfoFunc) CollectorOption {
 	return func(c *collector) {
@@ -114,6 +168,8 @@ func WithSkipOnSoftError() CollectorOption {
 func New(opts ...CollectorOption) metadatax.Collector {
 	c := &collector{
 		processInfoFunc: inspect,
+		maxArgs:         defaultMaxArgs,
+		maxCmdlineLen:   defaultMaxCmdlineLen,
 	}
 
 	for _, f := range opts {
@@ -152,10 +208,11 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 
 	md.AddLabel("pid", strconv.Itoa(int(pid)))
 	addLabel(md, "name", p.Name)
-	addLabel(md, "cmdline", truncate(strings.Join(p.Args, " "), maxCmdlineLen))
+	args := argsWithin(p.Args, c.maxArgs, c.maxCmdlineLen)
+	addLabel(md, "cmdline", strings.Join(args, " "))
 
 	argmd := md.Segment("arg")
-	for i, a := range p.Args[:min(len(p.Args), maxArgs)] {
+	for i, a := range args {
 		argmd.AddLabel(strconv.Itoa(i), a)
 	}
 

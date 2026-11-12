@@ -73,9 +73,8 @@ func TestGetMetadata_LongCommandLine(t *testing.T) {
 	}
 
 	p := &processInfo{
-		name:    "java",
-		args:    args,
-		cmdLine: strings.Join(args, " "),
+		name: "java",
+		args: args,
 	}
 
 	md, err := procfs.New(
@@ -87,16 +86,145 @@ func TestGetMetadata_LongCommandLine(t *testing.T) {
 	require.NoError(t, err)
 
 	labels := md.GetLabels()
-	for i := range 8 {
-		assert.Equal(t, []string{args[i]}, labels["process:arg:"+strconv.Itoa(i)])
-	}
-
-	assert.NotContains(t, labels, "process:arg:8")
 
 	cmdline := labels["process:cmdline"][0]
 	assert.LessOrEqual(t, len(cmdline), 1024)
 	assert.True(t, utf8.ValidString(cmdline))
-	assert.True(t, strings.HasPrefix(p.cmdLine, cmdline))
+	assert.True(t, strings.HasPrefix(strings.Join(args, " "), cmdline))
+
+	var covered []string
+	for i := 0; labels["process:arg:"+strconv.Itoa(i)] != nil; i++ {
+		covered = append(covered, labels["process:arg:"+strconv.Itoa(i)][0])
+	}
+
+	assert.Len(t, covered, 32)
+	assert.Equal(t, strings.Join(covered, " "), cmdline)
+}
+
+func TestGetMetadata_InvalidUTF8InArguments(t *testing.T) {
+	t.Parallel()
+
+	args := []string{"tool", "b\xffb", "\xff"}
+
+	md, err := procfs.New(
+		procfs.CollectorWithProcessInfoFunc(func(context.Context, int32) (procfs.ProcessInfo, error) {
+			return &processInfo{
+				name: "tool",
+				args: args,
+			}, nil
+		}),
+		procfs.WithForceHasProcFS(),
+	).GetMetadata(metadatax.ContextWithPID(context.Background(), 4321))
+	require.NoError(t, err)
+
+	labels := md.GetLabels()
+	assert.Equal(t, []string{"tool bb"}, labels["process:cmdline"])
+	assert.Equal(t, []string{"bb"}, labels["process:arg:1"])
+	assert.NotContains(t, labels, "process:arg:2")
+}
+
+func TestGetMetadata_CommandLineLimits(t *testing.T) {
+	t.Parallel()
+
+	collect := func(args []string, opts ...procfs.CollectorOption) metadatax.Labels {
+		md, err := procfs.New(append(opts,
+			procfs.CollectorWithProcessInfoFunc(func(context.Context, int32) (procfs.ProcessInfo, error) {
+				return &processInfo{
+					name: "tool",
+					args: args,
+				}, nil
+			}),
+			procfs.WithForceHasProcFS(),
+		)...).GetMetadata(metadatax.ContextWithPID(context.Background(), 4321))
+		require.NoError(t, err)
+
+		return md.GetLabels()
+	}
+
+	args := []string{"tool", "--password", "correct horse battery staple", "--user", "bob"}
+
+	labels := collect(args, procfs.CollectorWithMaxArgs(2))
+	assert.Equal(t, []string{"tool --password"}, labels["process:cmdline"])
+	assert.NotContains(t, labels, "process:arg:2")
+
+	labels = collect(args, procfs.CollectorWithMaxCmdlineLen(20))
+	assert.Equal(t, []string{"tool --password corr"}, labels["process:cmdline"])
+	assert.Equal(t, []string{"corr"}, labels["process:arg:2"])
+	assert.NotContains(t, labels, "process:arg:3")
+
+	many := []string{"tool"}
+	for i := range 40 {
+		many = append(many, "-a"+strconv.Itoa(i))
+	}
+
+	for _, opt := range []procfs.CollectorOption{
+		procfs.CollectorWithMaxArgs(0),
+		procfs.CollectorWithMaxArgs(-1),
+		procfs.CollectorWithMaxCmdlineLen(0),
+		procfs.CollectorWithMaxCmdlineLen(-1),
+	} {
+		labels = collect(many, opt)
+		assert.Equal(t, []string{strings.Join(many[:32], " ")}, labels["process:cmdline"])
+	}
+
+	labels = collect([]string{"aaa", "é"}, procfs.CollectorWithMaxCmdlineLen(5))
+	assert.Equal(t, []string{"aaa"}, labels["process:cmdline"])
+	assert.NotContains(t, labels, "process:arg:1")
+
+	labels = collect([]string{"aaa", "", "bbb"})
+	assert.Equal(t, []string{"aaa bbb"}, labels["process:cmdline"])
+	assert.Equal(t, []string{"bbb"}, labels["process:arg:1"])
+	assert.NotContains(t, labels, "process:arg:2")
+}
+
+func TestGetMetadata_ArgumentsKeepTheirSpaces(t *testing.T) {
+	t.Parallel()
+
+	args := []string{"tool", "--password", "correct horse battery staple"}
+
+	md, err := procfs.New(
+		procfs.CollectorWithProcessInfoFunc(func(context.Context, int32) (procfs.ProcessInfo, error) {
+			return &processInfo{
+				name: "tool",
+				args: args,
+			}, nil
+		}),
+		procfs.WithForceHasProcFS(),
+	).GetMetadata(metadatax.ContextWithPID(context.Background(), 4321))
+	require.NoError(t, err)
+
+	labels := md.GetLabels()
+	assert.Equal(t, []string{"tool --password correct horse battery staple"}, labels["process:cmdline"])
+	assert.Equal(t, []string{"correct horse battery staple"}, labels["process:arg:2"])
+}
+
+func TestGetMetadata_ArgumentLongerThanTheCommandLine(t *testing.T) {
+	t.Parallel()
+
+	args := []string{"/usr/bin/node", "-e", strings.Repeat("é", 1000)}
+
+	md, err := procfs.New(
+		procfs.CollectorWithProcessInfoFunc(func(context.Context, int32) (procfs.ProcessInfo, error) {
+			return &processInfo{
+				name: "node",
+				args: args,
+			}, nil
+		}),
+		procfs.WithForceHasProcFS(),
+	).GetMetadata(metadatax.ContextWithPID(context.Background(), 4321))
+	require.NoError(t, err)
+
+	labels := md.GetLabels()
+
+	cmdline := labels["process:cmdline"][0]
+	assert.LessOrEqual(t, len(cmdline), 1024)
+	assert.True(t, utf8.ValidString(cmdline))
+
+	last := labels["process:arg:2"][0]
+	assert.True(t, utf8.ValidString(last))
+	assert.True(t, strings.HasPrefix(args[2], last))
+	assert.Equal(t, "/usr/bin/node -e "+last, cmdline)
+	assert.NotContains(t, labels, "process:arg:3")
 }
 
 func TestStatSessionID(t *testing.T) {
