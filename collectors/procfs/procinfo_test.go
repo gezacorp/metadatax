@@ -98,8 +98,39 @@ func TestGetMetadata_LongCommandLine(t *testing.T) {
 		covered = append(covered, labels["process:arg:"+strconv.Itoa(i)][0])
 	}
 
-	assert.Greater(t, len(covered), 8)
+	assert.Len(t, covered, 32)
 	assert.Equal(t, strings.Join(covered, " "), cmdline)
+}
+
+func TestGetMetadata_CommandLineLimits(t *testing.T) {
+	t.Parallel()
+
+	args := []string{"tool", "--password", "correct horse battery staple", "--user", "bob"}
+	collect := func(opt procfs.CollectorOption) metadatax.Labels {
+		md, err := procfs.New(
+			procfs.CollectorWithProcessInfoFunc(func(context.Context, int32) (procfs.ProcessInfo, error) {
+				return &processInfo{
+					name:    "tool",
+					args:    args,
+					cmdLine: strings.Join(args, " "),
+				}, nil
+			}),
+			procfs.WithForceHasProcFS(),
+			opt,
+		).GetMetadata(metadatax.ContextWithPID(context.Background(), 4321))
+		require.NoError(t, err)
+
+		return md.GetLabels()
+	}
+
+	labels := collect(procfs.CollectorWithMaxArgs(2))
+	assert.Equal(t, []string{"tool --password"}, labels["process:cmdline"])
+	assert.NotContains(t, labels, "process:arg:2")
+
+	labels = collect(procfs.CollectorWithMaxCmdlineLen(20))
+	assert.Equal(t, []string{"tool --password corr"}, labels["process:cmdline"])
+	assert.Equal(t, []string{"corr"}, labels["process:arg:2"])
+	assert.NotContains(t, labels, "process:arg:3")
 }
 
 func TestGetMetadata_ArgumentsKeepTheirSpaces(t *testing.T) {

@@ -14,12 +14,12 @@ import (
 	"github.com/gezacorp/metadatax/collectors/macosprocess"
 )
 
-func collect(t *testing.T, p macosprocess.ProcessInfo) metadatax.Labels {
+func collect(t *testing.T, p macosprocess.ProcessInfo, opts ...macosprocess.CollectorOption) metadatax.Labels {
 	t.Helper()
 
-	c := macosprocess.New(macosprocess.CollectorWithProcessInfoFunc(func(context.Context, int32) (macosprocess.ProcessInfo, error) {
+	c := macosprocess.New(append(opts, macosprocess.CollectorWithProcessInfoFunc(func(context.Context, int32) (macosprocess.ProcessInfo, error) {
 		return p, nil
-	}))
+	}))...)
 
 	md, err := c.GetMetadata(metadatax.ContextWithPID(context.Background(), 4242))
 	require.NoError(t, err)
@@ -216,8 +216,23 @@ func TestCollector_LongCommandLine(t *testing.T) {
 		covered = append(covered, labels["process:arg:"+strconv.Itoa(i)][0])
 	}
 
-	assert.Greater(t, len(covered), 8)
+	assert.Len(t, covered, 32)
 	assert.Equal(t, strings.Join(covered, " "), cmdline)
+}
+
+func TestCollector_CommandLineLimits(t *testing.T) {
+	t.Parallel()
+
+	p := macosprocess.ProcessInfo{Args: []string{"tool", "--password", "correct horse battery staple", "--user", "bob"}}
+
+	labels := collect(t, p, macosprocess.CollectorWithMaxArgs(2))
+	assert.Equal(t, []string{"tool --password"}, labels["process:cmdline"])
+	assert.NotContains(t, labels, "process:arg:2")
+
+	labels = collect(t, p, macosprocess.CollectorWithMaxCmdlineLen(20))
+	assert.Equal(t, []string{"tool --password corr"}, labels["process:cmdline"])
+	assert.Equal(t, []string{"corr"}, labels["process:arg:2"])
+	assert.NotContains(t, labels, "process:arg:3")
 }
 
 func TestCollector_ArgumentsKeepTheirSpaces(t *testing.T) {

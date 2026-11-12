@@ -18,7 +18,8 @@ const (
 
 	basePath = "/proc/cmdline"
 
-	maxCmdlineLen = 1024
+	defaultMaxArgs       = 32
+	defaultMaxCmdlineLen = 1024
 )
 
 func truncate(s string, n int) string {
@@ -29,22 +30,22 @@ func truncate(s string, n int) string {
 	return strings.ToValidUTF8(s[:n], "")
 }
 
-// argsWithin returns the leading args whose space-joined line fits in n
-// bytes, the last one cut to fit.
-func argsWithin(args []string, n int) []string {
+// argsWithin returns at most maxArgs leading args whose space-joined line
+// fits in maxLen bytes, the last one cut to fit.
+func argsWithin(args []string, maxArgs, maxLen int) []string {
 	var within []string
 
 	for i, a := range args {
 		if i > 0 {
-			n--
+			maxLen--
 		}
 
-		if n <= 0 {
+		if i == maxArgs || maxLen <= 0 {
 			break
 		}
 
-		within = append(within, truncate(a, n))
-		n -= len(a)
+		within = append(within, truncate(a, maxLen))
+		maxLen -= len(a)
 	}
 
 	return within
@@ -53,6 +54,8 @@ func argsWithin(args []string, n int) []string {
 type collector struct {
 	hasProcfs       bool
 	extractEnvs     bool
+	maxArgs         int
+	maxCmdlineLen   int
 	processInfoFunc ProcessInfoFunc
 
 	mdContainerInitFunc func() metadatax.MetadataContainer
@@ -101,6 +104,18 @@ func CollectorWithExtractENVs() CollectorOption {
 	}
 }
 
+func CollectorWithMaxArgs(n int) CollectorOption {
+	return func(c *collector) {
+		c.maxArgs = n
+	}
+}
+
+func CollectorWithMaxCmdlineLen(n int) CollectorOption {
+	return func(c *collector) {
+		c.maxCmdlineLen = n
+	}
+}
+
 func CollectorWithProcessInfoFunc(fn ProcessInfoFunc) CollectorOption {
 	return func(c *collector) {
 		c.processInfoFunc = fn
@@ -126,7 +141,10 @@ func WithSkipOnSoftError() CollectorOption {
 }
 
 func New(opts ...CollectorOption) metadatax.Collector {
-	c := &collector{}
+	c := &collector{
+		maxArgs:       defaultMaxArgs,
+		maxCmdlineLen: defaultMaxCmdlineLen,
+	}
 
 	for _, f := range opts {
 		f(c)
@@ -203,7 +221,7 @@ func (c *collector) base(ctx context.Context, processInfo ProcessInfo, md metada
 
 	if p, ok := processInfo.(argsReader); ok {
 		if args, err := p.CmdlineSliceWithContext(ctx); err == nil {
-			args = argsWithin(args, maxCmdlineLen)
+			args = argsWithin(args, c.maxArgs, c.maxCmdlineLen)
 			md.AddLabel("cmdline", strings.Join(args, " "))
 
 			argmd := md.Segment("arg")
@@ -212,7 +230,7 @@ func (c *collector) base(ctx context.Context, processInfo ProcessInfo, md metada
 			}
 		}
 	} else if parts, err := processInfo.CmdlineWithContext(ctx); err == nil {
-		md.AddLabel("cmdline", truncate(parts, maxCmdlineLen))
+		md.AddLabel("cmdline", truncate(parts, c.maxCmdlineLen))
 	}
 
 	if p, ok := processInfo.(ppidReader); ok {
