@@ -127,15 +127,23 @@ type collector struct {
 
 type CollectorOption func(*collector)
 
+// CollectorWithMaxArgs sets how many arguments are kept; n <= 0 keeps the
+// default.
 func CollectorWithMaxArgs(n int) CollectorOption {
 	return func(c *collector) {
-		c.maxArgs = n
+		if n > 0 {
+			c.maxArgs = n
+		}
 	}
 }
 
+// CollectorWithMaxCmdlineLen sets how many bytes of the command line are
+// kept; n <= 0 keeps the default.
 func CollectorWithMaxCmdlineLen(n int) CollectorOption {
 	return func(c *collector) {
-		c.maxCmdlineLen = n
+		if n > 0 {
+			c.maxCmdlineLen = n
+		}
 	}
 }
 

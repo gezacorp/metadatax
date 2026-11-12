@@ -79,7 +79,7 @@ type ProcessInfoFunc func(ctx context.Context, pid int32) (ProcessInfo, error)
 
 type ProcessInfo interface {
 	NameWithContext(ctx context.Context) (string, error)
-	CmdlineWithContext(ctx context.Context) (string, error)
+	CmdlineSliceWithContext(ctx context.Context) ([]string, error)
 	UidsWithContext(ctx context.Context) ([]uint32, error)
 	GidsWithContext(ctx context.Context) ([]uint32, error)
 	GroupsWithContext(ctx context.Context) ([]uint32, error)
@@ -90,9 +90,6 @@ type ProcessInfo interface {
 
 // Optional ProcessInfo methods, used when the ProcessInfo implements them.
 type (
-	argsReader interface {
-		CmdlineSliceWithContext(ctx context.Context) ([]string, error)
-	}
 	ppidReader interface {
 		PpidWithContext(ctx context.Context) (int32, error)
 	}
@@ -115,15 +112,23 @@ func CollectorWithExtractENVs() CollectorOption {
 	}
 }
 
+// CollectorWithMaxArgs sets how many arguments are kept; n <= 0 keeps the
+// default.
 func CollectorWithMaxArgs(n int) CollectorOption {
 	return func(c *collector) {
-		c.maxArgs = n
+		if n > 0 {
+			c.maxArgs = n
+		}
 	}
 }
 
+// CollectorWithMaxCmdlineLen sets how many bytes of the command line are
+// kept; n <= 0 keeps the default.
 func CollectorWithMaxCmdlineLen(n int) CollectorOption {
 	return func(c *collector) {
-		c.maxCmdlineLen = n
+		if n > 0 {
+			c.maxCmdlineLen = n
+		}
 	}
 }
 
@@ -230,18 +235,14 @@ func (c *collector) base(ctx context.Context, processInfo ProcessInfo, md metada
 		md.AddLabel("name", name)
 	}
 
-	if p, ok := processInfo.(argsReader); ok {
-		if args, err := p.CmdlineSliceWithContext(ctx); err == nil {
-			args = argsWithin(args, c.maxArgs, c.maxCmdlineLen)
-			md.AddLabel("cmdline", strings.Join(args, " "))
+	if args, err := processInfo.CmdlineSliceWithContext(ctx); err == nil {
+		args = argsWithin(args, c.maxArgs, c.maxCmdlineLen)
+		md.AddLabel("cmdline", strings.Join(args, " "))
 
-			argmd := md.Segment("arg")
-			for i, a := range args {
-				argmd.AddLabel(strconv.Itoa(i), a)
-			}
+		argmd := md.Segment("arg")
+		for i, a := range args {
+			argmd.AddLabel(strconv.Itoa(i), a)
 		}
-	} else if parts, err := processInfo.CmdlineWithContext(ctx); err == nil {
-		md.AddLabel("cmdline", truncate(parts, c.maxCmdlineLen))
 	}
 
 	if p, ok := processInfo.(ppidReader); ok {

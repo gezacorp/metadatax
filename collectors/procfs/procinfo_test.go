@@ -73,9 +73,8 @@ func TestGetMetadata_LongCommandLine(t *testing.T) {
 	}
 
 	p := &processInfo{
-		name:    "java",
-		args:    args,
-		cmdLine: strings.Join(args, " "),
+		name: "java",
+		args: args,
 	}
 
 	md, err := procfs.New(
@@ -91,7 +90,7 @@ func TestGetMetadata_LongCommandLine(t *testing.T) {
 	cmdline := labels["process:cmdline"][0]
 	assert.LessOrEqual(t, len(cmdline), 1024)
 	assert.True(t, utf8.ValidString(cmdline))
-	assert.True(t, strings.HasPrefix(p.cmdLine, cmdline))
+	assert.True(t, strings.HasPrefix(strings.Join(args, " "), cmdline))
 
 	var covered []string
 	for i := 0; labels["process:arg:"+strconv.Itoa(i)] != nil; i++ {
@@ -110,9 +109,8 @@ func TestGetMetadata_InvalidUTF8InArguments(t *testing.T) {
 	md, err := procfs.New(
 		procfs.CollectorWithProcessInfoFunc(func(context.Context, int32) (procfs.ProcessInfo, error) {
 			return &processInfo{
-				name:    "tool",
-				args:    args,
-				cmdLine: strings.Join(args, " "),
+				name: "tool",
+				args: args,
 			}, nil
 		}),
 		procfs.WithForceHasProcFS(),
@@ -132,9 +130,8 @@ func TestGetMetadata_CommandLineLimits(t *testing.T) {
 		md, err := procfs.New(append(opts,
 			procfs.CollectorWithProcessInfoFunc(func(context.Context, int32) (procfs.ProcessInfo, error) {
 				return &processInfo{
-					name:    "tool",
-					args:    args,
-					cmdLine: strings.Join(args, " "),
+					name: "tool",
+					args: args,
 				}, nil
 			}),
 			procfs.WithForceHasProcFS(),
@@ -155,6 +152,21 @@ func TestGetMetadata_CommandLineLimits(t *testing.T) {
 	assert.Equal(t, []string{"corr"}, labels["process:arg:2"])
 	assert.NotContains(t, labels, "process:arg:3")
 
+	many := []string{"tool"}
+	for i := range 40 {
+		many = append(many, "-a"+strconv.Itoa(i))
+	}
+
+	for _, opt := range []procfs.CollectorOption{
+		procfs.CollectorWithMaxArgs(0),
+		procfs.CollectorWithMaxArgs(-1),
+		procfs.CollectorWithMaxCmdlineLen(0),
+		procfs.CollectorWithMaxCmdlineLen(-1),
+	} {
+		labels = collect(many, opt)
+		assert.Equal(t, []string{strings.Join(many[:32], " ")}, labels["process:cmdline"])
+	}
+
 	labels = collect([]string{"aaa", "é"}, procfs.CollectorWithMaxCmdlineLen(5))
 	assert.Equal(t, []string{"aaa"}, labels["process:cmdline"])
 	assert.NotContains(t, labels, "process:arg:1")
@@ -173,9 +185,8 @@ func TestGetMetadata_ArgumentsKeepTheirSpaces(t *testing.T) {
 	md, err := procfs.New(
 		procfs.CollectorWithProcessInfoFunc(func(context.Context, int32) (procfs.ProcessInfo, error) {
 			return &processInfo{
-				name:    "tool",
-				args:    args,
-				cmdLine: strings.Join(args, " "),
+				name: "tool",
+				args: args,
 			}, nil
 		}),
 		procfs.WithForceHasProcFS(),
@@ -195,9 +206,8 @@ func TestGetMetadata_ArgumentLongerThanTheCommandLine(t *testing.T) {
 	md, err := procfs.New(
 		procfs.CollectorWithProcessInfoFunc(func(context.Context, int32) (procfs.ProcessInfo, error) {
 			return &processInfo{
-				name:    "node",
-				args:    args,
-				cmdLine: strings.Join(args, " "),
+				name: "node",
+				args: args,
 			}, nil
 		}),
 		procfs.WithForceHasProcFS(),

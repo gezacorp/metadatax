@@ -244,6 +244,21 @@ func TestCollector_CommandLineLimits(t *testing.T) {
 	assert.Equal(t, []string{"corr"}, labels["process:arg:2"])
 	assert.NotContains(t, labels, "process:arg:3")
 
+	many := []string{"tool"}
+	for i := range 40 {
+		many = append(many, "-a"+strconv.Itoa(i))
+	}
+
+	for _, opt := range []macosprocess.CollectorOption{
+		macosprocess.CollectorWithMaxArgs(0),
+		macosprocess.CollectorWithMaxArgs(-1),
+		macosprocess.CollectorWithMaxCmdlineLen(0),
+		macosprocess.CollectorWithMaxCmdlineLen(-1),
+	} {
+		labels = collect(t, macosprocess.ProcessInfo{Args: many}, opt)
+		assert.Equal(t, []string{strings.Join(many[:32], " ")}, labels["process:cmdline"])
+	}
+
 	labels = collect(t, macosprocess.ProcessInfo{Args: []string{"aaa", "é"}}, macosprocess.CollectorWithMaxCmdlineLen(5))
 	assert.Equal(t, []string{"aaa"}, labels["process:cmdline"])
 	assert.NotContains(t, labels, "process:arg:1")
