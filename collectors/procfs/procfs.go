@@ -18,7 +18,6 @@ const (
 
 	basePath = "/proc/cmdline"
 
-	maxArgs       = 8
 	maxCmdlineLen = 1024
 )
 
@@ -28,6 +27,27 @@ func truncate(s string, n int) string {
 	}
 
 	return strings.ToValidUTF8(s[:n], "")
+}
+
+// argsWithin returns the leading args whose space-joined line fits in n
+// bytes, the last one cut to fit.
+func argsWithin(args []string, n int) []string {
+	var within []string
+
+	for i, a := range args {
+		if i > 0 {
+			n--
+		}
+
+		if n <= 0 {
+			break
+		}
+
+		within = append(within, truncate(a, n))
+		n -= len(a)
+	}
+
+	return within
 }
 
 type collector struct {
@@ -181,17 +201,18 @@ func (c *collector) base(ctx context.Context, processInfo ProcessInfo, md metada
 		md.AddLabel("name", name)
 	}
 
-	if parts, err := processInfo.CmdlineWithContext(ctx); err == nil {
-		md.AddLabel("cmdline", truncate(parts, maxCmdlineLen))
-	}
-
 	if p, ok := processInfo.(argsReader); ok {
 		if args, err := p.CmdlineSliceWithContext(ctx); err == nil {
+			args = argsWithin(args, maxCmdlineLen)
+			md.AddLabel("cmdline", strings.Join(args, " "))
+
 			argmd := md.Segment("arg")
-			for i, a := range args[:min(len(args), maxArgs)] {
+			for i, a := range args {
 				argmd.AddLabel(strconv.Itoa(i), a)
 			}
 		}
+	} else if parts, err := processInfo.CmdlineWithContext(ctx); err == nil {
+		md.AddLabel("cmdline", truncate(parts, maxCmdlineLen))
 	}
 
 	if p, ok := processInfo.(ppidReader); ok {

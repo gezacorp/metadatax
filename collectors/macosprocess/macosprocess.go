@@ -28,7 +28,6 @@ const (
 
 	noAuditID = 0xffffffff
 
-	maxArgs       = 8
 	maxCmdlineLen = 1024
 )
 
@@ -38,6 +37,27 @@ func truncate(s string, n int) string {
 	}
 
 	return strings.ToValidUTF8(s[:n], "")
+}
+
+// argsWithin returns the leading args whose space-joined line fits in n
+// bytes, the last one cut to fit.
+func argsWithin(args []string, n int) []string {
+	var within []string
+
+	for i, a := range args {
+		if i > 0 {
+			n--
+		}
+
+		if n <= 0 {
+			break
+		}
+
+		within = append(within, truncate(a, n))
+		n -= len(a)
+	}
+
+	return within
 }
 
 type ProcessInfo struct {
@@ -152,10 +172,11 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 
 	md.AddLabel("pid", strconv.Itoa(int(pid)))
 	addLabel(md, "name", p.Name)
-	addLabel(md, "cmdline", truncate(strings.Join(p.Args, " "), maxCmdlineLen))
+	args := argsWithin(p.Args, maxCmdlineLen)
+	addLabel(md, "cmdline", strings.Join(args, " "))
 
 	argmd := md.Segment("arg")
-	for i, a := range p.Args[:min(len(p.Args), maxArgs)] {
+	for i, a := range args {
 		argmd.AddLabel(strconv.Itoa(i), a)
 	}
 

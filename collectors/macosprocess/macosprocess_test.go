@@ -206,16 +206,45 @@ func TestCollector_LongCommandLine(t *testing.T) {
 
 	labels := collect(t, macosprocess.ProcessInfo{Args: args})
 
-	for i := range 8 {
-		assert.Equal(t, []string{args[i]}, labels["process:arg:"+strconv.Itoa(i)])
-	}
-
-	assert.NotContains(t, labels, "process:arg:8")
-
 	cmdline := labels["process:cmdline"][0]
 	assert.LessOrEqual(t, len(cmdline), 1024)
 	assert.True(t, utf8.ValidString(cmdline))
 	assert.True(t, strings.HasPrefix(strings.Join(args, " "), cmdline))
+
+	var covered []string
+	for i := 0; labels["process:arg:"+strconv.Itoa(i)] != nil; i++ {
+		covered = append(covered, labels["process:arg:"+strconv.Itoa(i)][0])
+	}
+
+	assert.Greater(t, len(covered), 8)
+	assert.Equal(t, strings.Join(covered, " "), cmdline)
+}
+
+func TestCollector_ArgumentsKeepTheirSpaces(t *testing.T) {
+	t.Parallel()
+
+	labels := collect(t, macosprocess.ProcessInfo{Args: []string{"tool", "--password", "correct horse battery staple"}})
+
+	assert.Equal(t, []string{"tool --password correct horse battery staple"}, labels["process:cmdline"])
+	assert.Equal(t, []string{"correct horse battery staple"}, labels["process:arg:2"])
+}
+
+func TestCollector_ArgumentLongerThanTheCommandLine(t *testing.T) {
+	t.Parallel()
+
+	args := []string{"/usr/local/bin/node", "-e", strings.Repeat("é", 1000)}
+
+	labels := collect(t, macosprocess.ProcessInfo{Args: args})
+
+	cmdline := labels["process:cmdline"][0]
+	assert.LessOrEqual(t, len(cmdline), 1024)
+	assert.True(t, utf8.ValidString(cmdline))
+
+	last := labels["process:arg:2"][0]
+	assert.True(t, utf8.ValidString(last))
+	assert.True(t, strings.HasPrefix(args[2], last))
+	assert.Equal(t, "/usr/local/bin/node -e "+last, cmdline)
+	assert.NotContains(t, labels, "process:arg:3")
 }
 
 func TestCollector_NoPID(t *testing.T) {
