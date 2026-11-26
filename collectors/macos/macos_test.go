@@ -333,16 +333,69 @@ func plistWith(body string) string {
 <plist version="1.0"><dict>` + body + `</dict></plist>`
 }
 
+const enrolledOutput = "Enrolled via DEP: No\nMDM enrollment: Yes\nMDM server: https://mdm.example.com/mdm\n"
+
+type managedPreference struct {
+	domain, key, label string
+}
+
+// managedPreferenceLabels collects with the given preferences and enrollment
+// and returns the managed preference labels.
+func managedPreferenceLabels(t *testing.T, dir string, enrollment commandOutput, prefs ...managedPreference) map[string][]string {
+	t.Helper()
+
+	opts := []macos.CollectorOption{
+		macos.CollectorWithForceDarwin(),
+		macos.CollectorWithGetSysctlFunc(sysctls(map[string]string{})),
+		macos.CollectorWithGetSysctlUint32Func(sysctlUint32s(map[string]uint32{})),
+		macos.CollectorWithCommandRunner(commandRunner(t, map[string]commandOutput{
+			"system_profiler": {file: "system_profiler_macbook.json"},
+			"profiles":        enrollment,
+		})),
+		macos.CollectorWithManagedPreferencesDir(dir),
+	}
+	for _, p := range prefs {
+		opts = append(opts, macos.CollectorWithManagedPreference(p.domain, p.key, p.label))
+	}
+
+	md, err := macos.New(opts...).GetMetadata(context.Background())
+	require.NoError(t, err)
+
+	labels := map[string][]string{}
+	for k, v := range md.GetLabels() {
+		if strings.HasPrefix(k, "macos:mdm:preference") {
+			labels[k] = v
+		}
+	}
+
+	return labels
+}
+
 func TestGetMetadataManagedPreference(t *testing.T) {
 	t.Parallel()
 
+	installOnLaunch := managedPreference{domain: "com.example.app", key: "InstallOnLaunch", label: "app-install"}
+
 	tests := map[string]struct {
-		content  *string
-		expected map[string][]string
+		content    *string
+		setup      func(t *testing.T, dir string)
+		enrollment commandOutput
+		prefs      []managedPreference
+		expected   map[string][]string
 	}{
 		"forced on": {
 			content:  new(plistWith(`<key>InstallOnLaunch</key><true/>`)),
-			expected: map[string][]string{"macos:mdm:app-install": {"true"}},
+			expected: map[string][]string{"macos:mdm:preference:app-install": {"true"}},
+		},
+		"not enrolled": {
+			content:    new(plistWith(`<key>InstallOnLaunch</key><true/>`)),
+			enrollment: commandOutput{output: "Enrolled via DEP: No\nMDM enrollment: No\n"},
+			expected:   map[string][]string{},
+		},
+		"enrollment unknown": {
+			content:    new(plistWith(`<key>InstallOnLaunch</key><true/>`)),
+			enrollment: commandOutput{err: errExit},
+			expected:   map[string][]string{},
 		},
 		"forced off": {
 			content:  new(plistWith(`<key>InstallOnLaunch</key><false/>`)),
@@ -367,6 +420,49 @@ func TestGetMetadataManagedPreference(t *testing.T) {
 		"missing file": {
 			expected: map[string][]string{},
 		},
+		"several keys of one domain": {
+			content: new(plistWith(`<key>InstallOnLaunch</key><true/><key>Other</key><true/><key>Off</key><false/>`)),
+			prefs: []managedPreference{
+				installOnLaunch,
+				{domain: "com.example.app", key: "Other", label: "other"},
+				{domain: "com.example.app", key: "Off", label: "off"},
+			},
+			expected: map[string][]string{
+				"macos:mdm:preference:app-install": {"true"},
+				"macos:mdm:preference:other":       {"true"},
+			},
+		},
+		"empty label": {
+			content:  new(plistWith(`<key>InstallOnLaunch</key><true/>`)),
+			prefs:    []managedPreference{{domain: "com.example.app", key: "InstallOnLaunch"}},
+			expected: map[string][]string{},
+		},
+		"empty domain": {
+			setup: func(t *testing.T, dir string) {
+				t.Helper()
+				require.NoError(t, os.WriteFile(filepath.Join(dir, ".plist"), []byte(plistWith(`<key>InstallOnLaunch</key><true/>`)), 0o600))
+			},
+			prefs:    []managedPreference{{key: "InstallOnLaunch", label: "app-install"}},
+			expected: map[string][]string{},
+		},
+		"domain with a path separator": {
+			setup: func(t *testing.T, dir string) {
+				t.Helper()
+				require.NoError(t, os.Mkdir(filepath.Join(dir, "sub"), 0o700))
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "sub", "com.example.app.plist"), []byte(plistWith(`<key>InstallOnLaunch</key><true/>`)), 0o600))
+			},
+			prefs:    []managedPreference{{domain: "sub/com.example.app", key: "InstallOnLaunch", label: "app-install"}},
+			expected: map[string][]string{},
+		},
+		"symlink": {
+			setup: func(t *testing.T, dir string) {
+				t.Helper()
+				target := filepath.Join(t.TempDir(), "target.plist")
+				require.NoError(t, os.WriteFile(target, []byte(plistWith(`<key>InstallOnLaunch</key><true/>`)), 0o600))
+				require.NoError(t, os.Symlink(target, filepath.Join(dir, "com.example.app.plist")))
+			},
+			expected: map[string][]string{},
+		},
 	}
 
 	for name, tt := range tests {
@@ -377,29 +473,21 @@ func TestGetMetadataManagedPreference(t *testing.T) {
 			if tt.content != nil {
 				require.NoError(t, os.WriteFile(filepath.Join(dir, "com.example.app.plist"), []byte(*tt.content), 0o600))
 			}
-
-			collector := macos.New(
-				macos.CollectorWithForceDarwin(),
-				macos.CollectorWithGetSysctlFunc(sysctls(map[string]string{})),
-				macos.CollectorWithGetSysctlUint32Func(sysctlUint32s(map[string]uint32{})),
-				macos.CollectorWithCommandRunner(commandRunner(t, map[string]commandOutput{
-					"system_profiler": {file: "system_profiler_macbook.json"},
-					"profiles":        {err: errExit},
-				})),
-				macos.CollectorWithManagedPreferencesDir(dir),
-				macos.CollectorWithManagedPreference("com.example.app", "InstallOnLaunch", "app-install"),
-			)
-
-			md, err := collector.GetMetadata(context.Background())
-			require.NoError(t, err)
-
-			labels := map[string][]string{}
-			for k, v := range md.GetLabels() {
-				if strings.HasPrefix(k, "macos:mdm:") {
-					labels[k] = v
-				}
+			if tt.setup != nil {
+				tt.setup(t, dir)
 			}
-			assert.Equal(t, tt.expected, labels)
+
+			enrollment := tt.enrollment
+			if enrollment == (commandOutput{}) {
+				enrollment = commandOutput{output: enrolledOutput}
+			}
+
+			prefs := tt.prefs
+			if prefs == nil {
+				prefs = []managedPreference{installOnLaunch}
+			}
+
+			assert.Equal(t, tt.expected, managedPreferenceLabels(t, dir, enrollment, prefs...))
 		})
 	}
 }

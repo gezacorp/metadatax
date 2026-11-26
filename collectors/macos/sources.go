@@ -125,27 +125,34 @@ type managedPreference struct {
 	label  string
 }
 
-// managedPreferenceIsTrue reports whether the managed preferences of 'domain'
-// in 'dir' set 'key' to true. A missing, unreadable or too large file, a
-// missing key or a value that isn't a boolean count as false.
-func managedPreferenceIsTrue(dir, domain, key string) bool {
-	f, err := os.Open(filepath.Join(dir, domain+".plist"))
+// readManagedPreferences returns the managed preferences of 'domain' in 'dir'.
+// An invalid domain, a missing, unreadable, too large or non-regular file (a
+// symlink or a FIFO, which would block the read) or an invalid plist give nil.
+func readManagedPreferences(dir, domain string) map[string]any {
+	if domain == "" || strings.ContainsRune(domain, filepath.Separator) {
+		return nil
+	}
+
+	path := filepath.Join(dir, domain+".plist")
+	if info, err := os.Lstat(path); err != nil || !info.Mode().IsRegular() {
+		return nil
+	}
+
+	f, err := os.Open(path)
 	if err != nil {
-		return false
+		return nil
 	}
 	defer f.Close()
 
 	data, err := io.ReadAll(io.LimitReader(f, maxManagedPreferencesSize+1))
 	if err != nil || len(data) > maxManagedPreferencesSize {
-		return false
+		return nil
 	}
 
 	var prefs map[string]any
 	if _, err := plist.Unmarshal(data, &prefs); err != nil {
-		return false
+		return nil
 	}
 
-	on, _ := prefs[key].(bool)
-
-	return on
+	return prefs
 }
