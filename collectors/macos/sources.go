@@ -5,11 +5,18 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"emperror.dev/errors"
+	"howett.net/plist"
 )
+
+// maxManagedPreferencesSize is the largest managed preferences file read.
+const maxManagedPreferencesSize = 1 << 20
 
 type systemProfile struct {
 	Hardware []hardwareOverview `json:"SPHardwareDataType"`
@@ -110,4 +117,42 @@ func urlHost(value string) string {
 	}
 
 	return u.Hostname()
+}
+
+type managedPreference struct {
+	domain string
+	key    string
+	label  string
+}
+
+// readManagedPreferences returns the managed preferences of 'domain' in 'dir'.
+// An invalid domain, a missing, unreadable, too large or non-regular file (a
+// symlink or a FIFO, which would block the read) or an invalid plist give nil.
+func readManagedPreferences(dir, domain string) map[string]any {
+	if domain == "" || strings.ContainsRune(domain, filepath.Separator) {
+		return nil
+	}
+
+	path := filepath.Join(dir, domain+".plist")
+	if info, err := os.Lstat(path); err != nil || !info.Mode().IsRegular() {
+		return nil
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+
+	data, err := io.ReadAll(io.LimitReader(f, maxManagedPreferencesSize+1))
+	if err != nil || len(data) > maxManagedPreferencesSize {
+		return nil
+	}
+
+	var prefs map[string]any
+	if _, err := plist.Unmarshal(data, &prefs); err != nil {
+		return nil
+	}
+
+	return prefs
 }

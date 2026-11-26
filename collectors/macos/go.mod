@@ -7,6 +7,7 @@ require (
 	github.com/gezacorp/metadatax v0.0.0-20250619152456-c2ae8300820c
 	github.com/stretchr/testify v1.8.4
 	golang.org/x/sys v0.48.0
+	howett.net/plist v1.0.1
 )
 
 require (

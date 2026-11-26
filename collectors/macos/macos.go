@@ -17,6 +17,8 @@ const (
 	name = "macos"
 
 	defaultCommandTimeout = 10 * time.Second
+
+	defaultManagedPreferencesDir = "/Library/Managed Preferences"
 )
 
 type collector struct {
@@ -26,6 +28,9 @@ type collector struct {
 	getSysctlUint32Func GetSysctlUint32Func
 	runCommand          CommandRunner
 	commandTimeout      time.Duration
+
+	managedPreferencesDir string
+	managedPreferences    []managedPreference
 
 	mdContainerInitFunc func() metadatax.MetadataContainer
 }
@@ -64,6 +69,24 @@ func CollectorWithCommandRunner(fn CommandRunner) CollectorOption {
 	}
 }
 
+// CollectorWithManagedPreference reports mdm:preference:<label> "true" when the
+// Mac is MDM-enrolled and the managed preferences of 'domain' set 'key' to true.
+// Managed preferences come from configuration profiles, which an MDM pushes but
+// an admin can also install by hand, so the label is a signal, not proof.
+func CollectorWithManagedPreference(domain, key, label string) CollectorOption {
+	return func(c *collector) {
+		c.managedPreferences = append(c.managedPreferences, managedPreference{domain: domain, key: key, label: label})
+	}
+}
+
+// CollectorWithManagedPreferencesDir sets where managed preferences are read
+// from, /Library/Managed Preferences by default.
+func CollectorWithManagedPreferencesDir(dir string) CollectorOption {
+	return func(c *collector) {
+		c.managedPreferencesDir = dir
+	}
+}
+
 func CollectorWithMetadataContainerInitFunc(fn func() metadatax.MetadataContainer) CollectorOption {
 	return func(c *collector) {
 		c.mdContainerInitFunc = fn
@@ -84,6 +107,8 @@ func New(opts ...CollectorOption) metadatax.Collector {
 		getSysctlUint32Func: getSysctlUint32,
 		runCommand:          runCommand,
 		commandTimeout:      defaultCommandTimeout,
+
+		managedPreferencesDir: defaultManagedPreferencesDir,
 	}
 
 	for _, f := range opts {
@@ -144,9 +169,34 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 			AddLabel("enrolled", strconv.FormatBool(enrollment.Enrolled)).
 			AddLabel("dep", strconv.FormatBool(enrollment.DEP)).
 			AddLabel("server", enrollment.ServerHost)
+
+		if enrollment.Enrolled {
+			c.addManagedPreferences(md.Segment("mdm").Segment("preference"))
+		}
 	}
 
 	return md, nil
+}
+
+// addManagedPreferences adds the configured managed preference labels that are
+// true, reading each domain's file once.
+func (c *collector) addManagedPreferences(md metadatax.MetadataContainer) {
+	domains := map[string]map[string]any{}
+	for _, pref := range c.managedPreferences {
+		if pref.label == "" {
+			continue
+		}
+
+		prefs, ok := domains[pref.domain]
+		if !ok {
+			prefs = readManagedPreferences(c.managedPreferencesDir, pref.domain)
+			domains[pref.domain] = prefs
+		}
+
+		if on, _ := prefs[pref.key].(bool); on {
+			md.AddLabel(pref.label, "true")
+		}
+	}
 }
 
 func (c *collector) sysctl(name string) string {
