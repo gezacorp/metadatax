@@ -5,11 +5,18 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"emperror.dev/errors"
+	"howett.net/plist"
 )
+
+// maxManagedPreferencesSize is the largest managed preferences file read.
+const maxManagedPreferencesSize = 1 << 20
 
 type systemProfile struct {
 	Hardware []hardwareOverview `json:"SPHardwareDataType"`
@@ -110,4 +117,35 @@ func urlHost(value string) string {
 	}
 
 	return u.Hostname()
+}
+
+type managedPreference struct {
+	domain string
+	key    string
+	label  string
+}
+
+// managedPreferenceIsTrue reports whether the managed preferences of 'domain'
+// in 'dir' set 'key' to true. A missing, unreadable or too large file, a
+// missing key or a value that isn't a boolean count as false.
+func managedPreferenceIsTrue(dir, domain, key string) bool {
+	f, err := os.Open(filepath.Join(dir, domain+".plist"))
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+
+	data, err := io.ReadAll(io.LimitReader(f, maxManagedPreferencesSize+1))
+	if err != nil || len(data) > maxManagedPreferencesSize {
+		return false
+	}
+
+	var prefs map[string]any
+	if _, err := plist.Unmarshal(data, &prefs); err != nil {
+		return false
+	}
+
+	on, _ := prefs[key].(bool)
+
+	return on
 }

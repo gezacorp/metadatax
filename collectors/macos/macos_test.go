@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -322,6 +323,83 @@ func TestDetectDeviceType(t *testing.T) {
 			t.Parallel()
 
 			assert.Equal(t, tt.expected, macos.DetectDeviceType(tt.modelName, tt.modelIdentifier, tt.isVirtual))
+		})
+	}
+}
+
+func plistWith(body string) string {
+	return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>` + body + `</dict></plist>`
+}
+
+func TestGetMetadataManagedPreference(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]struct {
+		content  *string
+		expected map[string][]string
+	}{
+		"forced on": {
+			content:  new(plistWith(`<key>InstallOnLaunch</key><true/>`)),
+			expected: map[string][]string{"macos:mdm:app-install": {"true"}},
+		},
+		"forced off": {
+			content:  new(plistWith(`<key>InstallOnLaunch</key><false/>`)),
+			expected: map[string][]string{},
+		},
+		"not a boolean": {
+			content:  new(plistWith(`<key>InstallOnLaunch</key><string>true</string>`)),
+			expected: map[string][]string{},
+		},
+		"missing key": {
+			content:  new(plistWith(`<key>Other</key><true/>`)),
+			expected: map[string][]string{},
+		},
+		"invalid plist": {
+			content:  new("not a plist"),
+			expected: map[string][]string{},
+		},
+		"too large": {
+			content:  new(plistWith(`<key>InstallOnLaunch</key><true/><key>Padding</key><string>` + strings.Repeat("x", 1<<20) + `</string>`)),
+			expected: map[string][]string{},
+		},
+		"missing file": {
+			expected: map[string][]string{},
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			dir := t.TempDir()
+			if tt.content != nil {
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "com.example.app.plist"), []byte(*tt.content), 0o600))
+			}
+
+			collector := macos.New(
+				macos.CollectorWithForceDarwin(),
+				macos.CollectorWithGetSysctlFunc(sysctls(map[string]string{})),
+				macos.CollectorWithGetSysctlUint32Func(sysctlUint32s(map[string]uint32{})),
+				macos.CollectorWithCommandRunner(commandRunner(t, map[string]commandOutput{
+					"system_profiler": {file: "system_profiler_macbook.json"},
+					"profiles":        {err: errExit},
+				})),
+				macos.CollectorWithManagedPreferencesDir(dir),
+				macos.CollectorWithManagedPreference("com.example.app", "InstallOnLaunch", "app-install"),
+			)
+
+			md, err := collector.GetMetadata(context.Background())
+			require.NoError(t, err)
+
+			labels := map[string][]string{}
+			for k, v := range md.GetLabels() {
+				if strings.HasPrefix(k, "macos:mdm:") {
+					labels[k] = v
+				}
+			}
+			assert.Equal(t, tt.expected, labels)
 		})
 	}
 }

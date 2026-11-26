@@ -17,6 +17,8 @@ const (
 	name = "macos"
 
 	defaultCommandTimeout = 10 * time.Second
+
+	defaultManagedPreferencesDir = "/Library/Managed Preferences"
 )
 
 type collector struct {
@@ -26,6 +28,9 @@ type collector struct {
 	getSysctlUint32Func GetSysctlUint32Func
 	runCommand          CommandRunner
 	commandTimeout      time.Duration
+
+	managedPreferencesDir string
+	managedPreferences    []managedPreference
 
 	mdContainerInitFunc func() metadatax.MetadataContainer
 }
@@ -64,6 +69,22 @@ func CollectorWithCommandRunner(fn CommandRunner) CollectorOption {
 	}
 }
 
+// CollectorWithManagedPreference reports mdm:<label> "true" when the managed
+// preferences of 'domain', which only an MDM profile installs, set 'key' to true.
+func CollectorWithManagedPreference(domain, key, label string) CollectorOption {
+	return func(c *collector) {
+		c.managedPreferences = append(c.managedPreferences, managedPreference{domain: domain, key: key, label: label})
+	}
+}
+
+// CollectorWithManagedPreferencesDir sets where managed preferences are read
+// from, /Library/Managed Preferences by default.
+func CollectorWithManagedPreferencesDir(dir string) CollectorOption {
+	return func(c *collector) {
+		c.managedPreferencesDir = dir
+	}
+}
+
 func CollectorWithMetadataContainerInitFunc(fn func() metadatax.MetadataContainer) CollectorOption {
 	return func(c *collector) {
 		c.mdContainerInitFunc = fn
@@ -84,6 +105,8 @@ func New(opts ...CollectorOption) metadatax.Collector {
 		getSysctlUint32Func: getSysctlUint32,
 		runCommand:          runCommand,
 		commandTimeout:      defaultCommandTimeout,
+
+		managedPreferencesDir: defaultManagedPreferencesDir,
 	}
 
 	for _, f := range opts {
@@ -144,6 +167,12 @@ func (c *collector) GetMetadata(ctx context.Context) (metadatax.MetadataContaine
 			AddLabel("enrolled", strconv.FormatBool(enrollment.Enrolled)).
 			AddLabel("dep", strconv.FormatBool(enrollment.DEP)).
 			AddLabel("server", enrollment.ServerHost)
+	}
+
+	for _, pref := range c.managedPreferences {
+		if managedPreferenceIsTrue(c.managedPreferencesDir, pref.domain, pref.key) {
+			md.Segment("mdm").AddLabel(pref.label, "true")
+		}
 	}
 
 	return md, nil
